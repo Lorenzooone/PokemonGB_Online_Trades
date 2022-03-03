@@ -42,11 +42,13 @@ class GSCTrading:
             self.send_trading_data(self.write_entire_data(send_buf))
             found = False
             while not found:
-                recieved = self.get_trading_data([3,3,1], get_base=False)
-                if recieved is not None:
-                    recv_buf = self.read_entire_data(recieved)
+                received = self.get_trading_data([3,3,1], get_base=False)
+                if received is not None:
+                    recv_buf = self.read_entire_data(received)
                     if recv_buf[1] is not None and recv_buf[1][0] == 0xFFFF and recv_buf[2][0] == index: 
                         found = True
+                if not found:
+                    self.sleep_func()
 
         while next == self.gsc_next_section:
             self.sleep_func()
@@ -72,23 +74,26 @@ class GSCTrading:
             send_buf = [[0,next],[0xFFFF,0xFF],[index]]
             for i in range(length + 1):
                 found = False
+                self.send_trading_data(self.write_entire_data(send_buf))
                 while not found:
-                    self.send_trading_data(self.write_entire_data(send_buf))
-                    recieved = self.get_trading_data([3,3,1], get_base=False)
-                    if recieved is not None:
-                        recv_buf = self.read_entire_data(recieved)
+                    received = self.get_trading_data([3,3,1], get_base=False)
+                    if received is not None:
+                        recv_buf = self.read_entire_data(received)
                         if recv_buf[i&1] is not None: 
-                            index = recv_buf[i&1][0]
-                            if index == i and i != length:
+                            byte_num = recv_buf[i&1][0]
+                            if byte_num == i and i != length:
+                                self.sleep_func()
                                 self.sendByte(recv_buf[i&1][1])
                                 next = self.receiveByte()
                                 send_buf[(i+1)&1][0] = i + 1
                                 send_buf[(i+1)&1][1] = next
                                 found = True
-                            elif index == i:
+                            elif byte_num == i:
                                 found = True
                             elif i == length and recv_buf[2][0] == index + 1:
                                 found = True
+                    if not found:
+                        self.sleep_func()
             buf = None
         return buf
     
