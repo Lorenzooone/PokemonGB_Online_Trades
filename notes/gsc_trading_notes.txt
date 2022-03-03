@@ -1,0 +1,34 @@
+GSC Trading:
+0x01 First connection
+0xFE Saving/Connecting to RBY/Waiting
+0x61 Saved, waiting....
+0xD1/0xD2/0xD0 Trading/Fighting/Old trade
+0x75 Start actual trade
+0x76 Start trading data
+0xFD Sync-Up
+// Apparently waiting for more than 20 seconds after a Sync-Up causes desync, even if the target is the slave
+???? 0xA
+0xFD Sync-Up
+// Apparently waiting for more than 20 seconds after a Sync-Up causes desync, even if the target is the slave
+Trainer name 0xB
+Number of Pokémon 1
+Pokémon Species 1*6
+0xFF
+Trainer ID 2
+Pokémon data 0x30*6
+OT Name 0xB * 6
+Nickname 0xB * 6
+0xFD Sync-Up
+// Apparently waiting for more than 20 seconds after a Sync-Up causes desync, even if the target is the slave
+0x00 7 times
+0xFF 2 times
+0x00 A bunch
+0x20 6 times
+Mail text 0x21 * 6
+Mail sender 0xE * 6
+Options mid-menu:
+0xFE No choice
+0x70 - 0x75 selected Pokémon X-0x70
+0x7F Quit
+0x72 Trade
+0x71 No trade

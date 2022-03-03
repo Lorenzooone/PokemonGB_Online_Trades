@@ -3,9 +3,12 @@ import time
 class GSCTrading:
 
     sleep_timer = 0.01
-    gsc_enter_room_states = [0x01, 0xFE, 0x61, 0xD1, 0xFE]
-    gsc_start_trading_states = [0x75, 0x76, 0xFD]
+    big_sleep_timer = 1.0
+    gsc_enter_room_states = [[0x01, 0xFE, 0x61, 0xD1, 0xFE], [0xFE, 0x61, 0xD1, 0xFE, 0xFE]]
+    gsc_start_trading_states = [[0x75, 0x76, 0xFD], [0x76, 0xFD, 0xFD]]
     gsc_next_section = 0xFD
+    gsc_wait = 0
+    gsc_num_waits = 32
     gsc_special_sections_len = [0xA, 0x1BC, 0x24C]
     gsc_stop_trade = 0x7F
     
@@ -18,44 +21,90 @@ class GSCTrading:
 
     def send_predefined_section(self, states_list, stop_before_last):
         sending = 0
-        next = states_list[sending]
-        sent = False
-        while(not sent or sending < len(states_list) - 1):
+        stop_to = 0
+        if stop_before_last:
+            stop_to = 1
+        while(sending < len(states_list[0]) - stop_to):
+            next = states_list[0][sending]
             self.sleep_func()
             self.sendByte(next)
-            sent = True
             recv = self.receiveByte()
-            if(sending < (len(states_list) - 1) and recv == states_list[sending + 1]):
+            if(recv == states_list[1][sending]):
                 sending += 1
-                next = states_list[sending]
-                sent = stop_before_last
                 
-    def read_section(self, index, send_data=None):
+    def read_section(self, index, send_data, buffered):
         length = self.gsc_special_sections_len[index]
         next = self.gsc_next_section
-        
-        while(next == self.gsc_next_section):
-            self.sleep_func()
-            self.sendByte(self.gsc_next_section)
-            next = self.receiveByte()
-        
-        buf = [next]
-        
-        for i in range(length-1):
-            if send_data is not None:
-                next = send_data[i]
-            self.sleep_func()
-            self.sendByte(next)
-            next = self.receiveByte()
-            buf += [next]
-        
-        if send_data is not None:
-            next = send_data[length-1]
-            self.sleep_func()
-            self.sendByte(next)
-            self.receiveByte()
 
+        if not buffered:
+            # Wait for a connection to be established
+            send_buf = [[0xFFFF,0xFF],[0xFFFF,0xFF],[index]]
+            self.send_trading_data(self.write_entire_data(send_buf))
+            found = False
+            while not found:
+                recieved = self.get_trading_data([3,3,1], get_base=False)
+                if recieved is not None:
+                    recv_buf = self.read_entire_data(recieved)
+                    if recv_buf[1] is not None and recv_buf[1][0] == 0xFFFF and recv_buf[2][0] == index: 
+                        found = True
+
+        while next == self.gsc_next_section:
+            self.sleep_func()
+            self.sendByte(next)
+            next = self.receiveByte()
+
+        if buffered:
+            buf = [next]
+            for i in range(length-1):
+                if send_data is not None:
+                    next = send_data[i]
+                self.sleep_func()
+                self.sendByte(next)
+                next = self.receiveByte()
+                buf += [next]
+            
+            if send_data is not None:
+                next = send_data[length-1]
+                self.sleep_func()
+                self.sendByte(next)
+                self.receiveByte()
+        else:
+            send_buf = [[0,next],[0xFFFF,0xFF],[index]]
+            for i in range(length + 1):
+                found = False
+                while not found:
+                    self.send_trading_data(self.write_entire_data(send_buf))
+                    recieved = self.get_trading_data([3,3,1], get_base=False)
+                    if recieved is not None:
+                        recv_buf = self.read_entire_data(recieved)
+                        if recv_buf[i&1] is not None: 
+                            index = recv_buf[i&1][0]
+                            if index == i and i != length:
+                                self.sendByte(recv_buf[i&1][1])
+                                next = self.receiveByte()
+                                send_buf[(i+1)&1][0] = i + 1
+                                send_buf[(i+1)&1][1] = next
+                                found = True
+                            elif index == i:
+                                found = True
+                            elif i == length and recv_buf[2][0] == index + 1:
+                                found = True
+            buf = None
         return buf
+    
+    def read_entire_data(self,data):
+        return [self.read_sync_data(data[0]), self.read_sync_data(data[1]), data[2]]
+        
+    def write_entire_data(self,data):
+        return [self.write_sync_data(data[0]), self.write_sync_data(data[1]), data[2]]
+    
+    def read_sync_data(self,data):
+        if len(data) > 0:
+            return [(data[0]<<8) + data[1], data[2]]
+        return None
+    
+    def write_sync_data(self, data):
+        return [(data[0]>>8)&0xFF, data[0]&0xFF, data[1]]
 
     def end_trade(self):
         next = 0
@@ -70,18 +119,18 @@ class GSCTrading:
     def enter_room(self):
         self.send_predefined_section(self.gsc_enter_room_states, False)
         
-    def trade_starting_sequence(self, send_data = [None, None, None]):
+    def trade_starting_sequence(self, buffered, send_data = [None, None, None]):
         self.send_predefined_section(self.gsc_start_trading_states, True)
-        random_data = self.read_section(0, send_data[0])
-        pokemon_data = self.read_section(1, send_data[1])
-        mail_data = self.read_section(2, send_data[2])
+        random_data = self.read_section(0, send_data[0], buffered)
+        pokemon_data = self.read_section(1, send_data[1], buffered)
+        mail_data = self.read_section(2, send_data[2], buffered)
         
         return [random_data, pokemon_data, mail_data]
         
-    def get_trading_data(self):
-        data = self.load_trading_data(self.fileOtherTargetName)
-        if data is None:
-            data = self.load_trading_data(self.fileBaseTargetName)
+    def get_trading_data(self, lengths, get_base = True):
+        data = self.load_trading_data(self.fileOtherTargetName, lengths)
+        if data is None and get_base:
+            data = self.load_trading_data(self.fileBaseTargetName, lengths)
         return data
 
     def send_trading_data(self, data):
@@ -94,26 +143,32 @@ class GSCTrading:
                 with open(self.fileSelfTargetName, 'wb') as newFile:
                     newFile.write(bytearray(data[0] + data[1] + data[2]))
             except:
-                print("AAAA")
+                pass
 
-    def load_trading_data(self, target):
+    def load_trading_data(self, target, lengths):
         data = None
         try:
             with open(target, 'rb') as newFile:
-                tmpdata = list(newFile.read(sum(self.gsc_special_sections_len)))
-                data = [tmpdata[0:self.gsc_special_sections_len[0]], tmpdata[self.gsc_special_sections_len[0]: self.gsc_special_sections_len[0]+self.gsc_special_sections_len[1]], tmpdata[self.gsc_special_sections_len[0]+self.gsc_special_sections_len[1]:self.gsc_special_sections_len[0]+self.gsc_special_sections_len[1]+self.gsc_special_sections_len[2]]]
+                tmpdata = list(newFile.read(sum(lengths)))
+                data = [tmpdata[0:lengths[0]], tmpdata[lengths[0]: lengths[0]+lengths[1]], tmpdata[lengths[0]+lengths[1]:lengths[0]+lengths[1]+lengths[2]]]
         except FileNotFoundError as e:
             pass
         return data
 
-    def trade(self):
+    def trade(self, buffered = True):
         self.enter_room()
-        while True:
-            data = self.get_trading_data()
-            data = self.trade_starting_sequence(data)
-            self.send_trading_data(data)
-            self.end_trade()
+        if buffered:
+            while True:
+                data = self.get_trading_data(self.gsc_special_sections_len)
+                data = self.trade_starting_sequence(buffered, send_data=data)
+                self.send_trading_data(data)
+                self.end_trade()
+        else:
+            while True:
+                data = self.trade_starting_sequence(buffered)
+                self.end_trade()
+            
         
     # Function needed in order to make sure there is enough time for the slave to prepare the next byte.
-    def sleep_func(self):
-        time.sleep(self.sleep_timer)
+    def sleep_func(self, multiplier = 1):
+        time.sleep(self.sleep_timer * multiplier)

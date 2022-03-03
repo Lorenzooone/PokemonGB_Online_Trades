@@ -10,7 +10,7 @@ from time import sleep
 class BGBLinkCableServer (threading.Thread):
     PACKET_FORMAT = '<4BI'
     PACKET_SIZE_BYTES = 8
-    TRADE_AFTER = 0x2000
+    TRADE_AFTER = 0x20000
 
     def __init__(self, data_handler, verbose=False, host='', port=8765):
         threading.Thread.__init__(self)
