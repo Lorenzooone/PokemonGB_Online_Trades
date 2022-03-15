@@ -138,7 +138,9 @@ class GSCTrading:
             return True
         return False
                 
-    def get_chosen_mon(self):
+    def get_chosen_mon(self, close):
+        if close:
+            return self.gsc_stop_trade
         return 0x70
         
     def send_chosen_mon(self, choice):
@@ -149,7 +151,7 @@ class GSCTrading:
             return True
         return False
 
-    def do_trade(self):
+    def do_trade(self, close=False):
         trade_completed = False
 
         while not trade_completed:
@@ -164,7 +166,7 @@ class GSCTrading:
             received_choice = None
             while received_choice is None:
                 self.sleep_func()
-                received_choice = self.get_chosen_mon()
+                received_choice = self.get_chosen_mon(close)
 
             if not self.is_choice_stop(received_choice) and not self.is_choice_stop(sent_mon):
                 # Send the other player's choice to the game
@@ -204,7 +206,6 @@ class GSCTrading:
         self.send_predefined_section(self.gsc_enter_room_states, False)
         
     def trade_starting_sequence(self, buffered, send_data = [None, None, None]):
-        self.send_predefined_section(self.gsc_start_trading_states, True)
         random_data = self.read_section(0, send_data[0], buffered)
         pokemon_data = self.read_section(1, send_data[1], buffered)
         mail_data = self.read_section(2, send_data[2], buffered)
@@ -212,10 +213,12 @@ class GSCTrading:
         return [random_data, pokemon_data, mail_data]
         
     def get_trading_data(self, lengths, get_base = True):
+        success = True
         data = self.load_trading_data(self.fileOtherTargetName, lengths)
         if data is None and get_base:
+            success = False
             data = self.load_trading_data(self.fileBaseTargetName, lengths)
-        return data
+        return data, success
 
     def send_trading_data(self, data):
         self.save_trading_data(data)
@@ -243,12 +246,14 @@ class GSCTrading:
         self.enter_room()
         if buffered:
             while True:
-                data = self.get_trading_data(self.gsc_special_sections_len)
+                self.send_predefined_section(self.gsc_start_trading_states, True)
+                data, valid = self.get_trading_data(self.gsc_special_sections_len)
                 data = self.trade_starting_sequence(buffered, send_data=data)
                 self.send_trading_data(data)
-                self.do_trade()
+                self.do_trade(close=not valid)
         else:
             while True:
+                self.send_predefined_section(self.gsc_start_trading_states, True)
                 data = self.trade_starting_sequence(buffered)
                 self.do_trade()
             
