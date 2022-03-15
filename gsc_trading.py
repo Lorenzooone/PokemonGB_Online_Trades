@@ -29,9 +29,7 @@ class GSCTrading:
             stop_to = 1
         while(sending < len(states_list[0]) - stop_to):
             next = states_list[0][sending]
-            self.sleep_func()
-            self.sendByte(next)
-            recv = self.receiveByte()
+            recv = self.swap_byte(next)
             if(recv == states_list[1][sending]):
                 sending += 1
                 
@@ -54,25 +52,19 @@ class GSCTrading:
                     self.sleep_func()
 
         while next == self.gsc_next_section:
-            self.sleep_func()
-            self.sendByte(next)
-            next = self.receiveByte()
+            next = self.swap_byte(next)
 
         if buffered:
             buf = [next]
             for i in range(length-1):
                 if send_data is not None:
                     next = send_data[i]
-                self.sleep_func()
-                self.sendByte(next)
-                next = self.receiveByte()
+                next = self.swap_byte(next)
                 buf += [next]
             
             if send_data is not None:
                 next = send_data[length-1]
-                self.sleep_func()
-                self.sendByte(next)
-                self.receiveByte()
+                self.swap_byte(next)
         else:
             send_buf = [[0,next],[0xFFFF,0xFF],[index]]
             for i in range(length + 1):
@@ -85,9 +77,7 @@ class GSCTrading:
                         if recv_buf[i&1] is not None: 
                             byte_num = recv_buf[i&1][0]
                             if byte_num == i and i != length:
-                                self.sleep_func()
-                                self.sendByte(recv_buf[i&1][1])
-                                next = self.receiveByte()
+                                next = self.swap_byte(recv_buf[i&1][1])
                                 send_buf[(i+1)&1][0] = i + 1
                                 send_buf[(i+1)&1][1] = next
                                 found = True
@@ -99,6 +89,11 @@ class GSCTrading:
                         self.sleep_func()
             buf = None
         return buf
+    
+    def swap_byte(self, send_data):
+        self.sleep_func()
+        self.sendByte(send_data)
+        return self.receiveByte()
     
     def read_entire_data(self,data):
         return [self.read_sync_data(data[0]), self.read_sync_data(data[1]), data[2]]
@@ -118,24 +113,18 @@ class GSCTrading:
         next = 0
         target = self.gsc_stop_trade
         while(next != target):
-            self.sleep_func()
-            self.sendByte(self.gsc_stop_trade)
-            next = self.receiveByte()
+            next = self.swap_byte(self.gsc_stop_trade)
             if(target == self.gsc_stop_trade and next == target):
                 target = 0
 
     def wait_for_input(self, next):
         while(next == self.gsc_no_input):
-            self.sleep_func()
-            self.sendByte(self.gsc_no_input)
-            next = self.receiveByte()
+            next = self.swap_byte(self.gsc_no_input)
         return next
 
     def wait_for_no_input(self, next):
         while(next != self.gsc_no_input):
-            self.sleep_func()
-            self.sendByte(self.gsc_no_input)
-            next = self.receiveByte()
+            next = self.swap_byte(self.gsc_no_input)
         return next
 
     def get_accepted(self):
@@ -179,9 +168,7 @@ class GSCTrading:
 
             if not self.is_choice_stop(received_choice) and not self.is_choice_stop(sent_mon):
                 # Send the other player's choice to the game
-                self.sleep_func()
-                self.sendByte(received_choice)
-                next = self.receiveByte()
+                next = self.swap_byte(received_choice)
 
                 # Get whether the trade was declined or not
                 next = self.wait_for_no_input(next)
@@ -197,9 +184,7 @@ class GSCTrading:
                     received_accepted = self.get_accepted()
                 
                 # Send the other player's choice to the game
-                self.sleep_func()
-                self.sendByte(received_accepted)
-                next = self.receiveByte()
+                next = self.swap_byte(received_accepted)
 
                 next = self.wait_for_no_input(next)
 
@@ -208,9 +193,7 @@ class GSCTrading:
                     next = self.wait_for_input(next)
 
                     trade_completed = True
-                    self.sleep_func()
-                    self.sendByte(next)
-                    next = self.receiveByte()
+                    next = self.swap_byte(next)
                     
             else:
                 # If someone wants to end the trade, do it
