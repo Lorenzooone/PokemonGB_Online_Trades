@@ -7,10 +7,13 @@ class GSCTrading:
     gsc_enter_room_states = [[0x01, 0xFE, 0x61, 0xD1, 0xFE], [0xFE, 0x61, 0xD1, 0xFE, 0xFE]]
     gsc_start_trading_states = [[0x75, 0x75, 0x76, 0xFD], [0x75, 0, 0xFD, 0xFD]]
     gsc_next_section = 0xFD
+    gsc_no_input = 0xFE
     gsc_wait = 0
     gsc_num_waits = 32
     gsc_special_sections_len = [0xA, 0x1BC, 0x24C]
     gsc_stop_trade = 0x7F
+    gsc_decline_trade = 0x71
+    gsc_accept_trade = 0x72
     
     def __init__(self, sending_func, receiving_func, base_no_trade = "base.bin", target_other="emu.bin", target_self="usb.bin"):
         self.sendByte = sending_func
@@ -121,6 +124,99 @@ class GSCTrading:
             if(target == self.gsc_stop_trade and next == target):
                 target = 0
 
+    def wait_for_input(self, next):
+        while(next == self.gsc_no_input):
+            self.sleep_func()
+            self.sendByte(self.gsc_no_input)
+            next = self.receiveByte()
+        return next
+
+    def wait_for_no_input(self, next):
+        while(next != self.gsc_no_input):
+            self.sleep_func()
+            self.sendByte(self.gsc_no_input)
+            next = self.receiveByte()
+        return next
+
+    def get_accepted(self):
+        return self.gsc_accept_trade
+                
+    def send_accepted(self, choice):
+        return not self.is_choice_decline(choice)
+        
+    def is_choice_decline(self, choice):
+        if choice == self.gsc_decline_trade:
+            return True
+        return False
+                
+    def get_chosen_mon(self):
+        return 0x70
+        
+    def send_chosen_mon(self, choice):
+        return not self.is_choice_stop(choice)
+
+    def is_choice_stop(self, choice):
+        if choice == self.gsc_stop_trade:
+            return True
+        return False
+
+    def do_trade(self):
+        trade_completed = False
+
+        while not trade_completed:
+            # Get the choice
+            next = self.gsc_no_input
+            sent_mon = self.wait_for_input(next)
+
+            # Send it to the other player
+            self.send_chosen_mon(sent_mon)
+            
+            # Get the other player's choice
+            received_choice = None
+            while received_choice is None:
+                self.sleep_func()
+                received_choice = self.get_chosen_mon()
+
+            if not self.is_choice_stop(received_choice) and not self.is_choice_stop(sent_mon):
+                # Send the other player's choice to the game
+                self.sleep_func()
+                self.sendByte(received_choice)
+                next = self.receiveByte()
+
+                # Get whether the trade was declined or not
+                next = self.wait_for_no_input(next)
+                accepted = self.wait_for_input(next)
+
+                # Send it to the other player
+                self.send_accepted(accepted)
+                
+                # Get the other player's choice
+                received_accepted = None
+                while received_accepted is None:
+                    self.sleep_func()
+                    received_accepted = self.get_accepted()
+                
+                # Send the other player's choice to the game
+                self.sleep_func()
+                self.sendByte(received_accepted)
+                next = self.receiveByte()
+
+                next = self.wait_for_no_input(next)
+
+                if not self.is_choice_decline(received_accepted) and not self.is_choice_decline(accepted):
+                    # Conclude the trade successfully
+                    next = self.wait_for_input(next)
+
+                    trade_completed = True
+                    self.sleep_func()
+                    self.sendByte(next)
+                    next = self.receiveByte()
+                    
+            else:
+                # If someone wants to end the trade, do it
+                trade_completed = True
+                self.end_trade()
+
     def enter_room(self):
         self.send_predefined_section(self.gsc_enter_room_states, False)
         
@@ -167,11 +263,11 @@ class GSCTrading:
                 data = self.get_trading_data(self.gsc_special_sections_len)
                 data = self.trade_starting_sequence(buffered, send_data=data)
                 self.send_trading_data(data)
-                self.end_trade()
+                self.do_trade()
         else:
             while True:
                 data = self.trade_starting_sequence(buffered)
-                self.end_trade()
+                self.do_trade()
             
         
     # Function needed in order to make sure there is enough time for the slave to prepare the next byte.
