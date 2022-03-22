@@ -1,4 +1,5 @@
 import time
+from gsc_trading_data import *
 
 class GSCTrading:
 
@@ -15,12 +16,13 @@ class GSCTrading:
     gsc_decline_trade = 0x71
     gsc_accept_trade = 0x72
     
-    def __init__(self, sending_func, receiving_func, base_no_trade = "base.bin", target_other="emu.bin", target_self="usb.bin"):
+    def __init__(self, sending_func, receiving_func, base_no_trade = "useful_data/base.bin", target_other="emu.bin", target_self="usb.bin"):
         self.sendByte = sending_func
         self.receiveByte = receiving_func
         self.fileBaseTargetName = base_no_trade
         self.fileOtherTargetName = target_other
         self.fileSelfTargetName = target_self
+        self.aux_data = GSCAuxData()
 
     def send_predefined_section(self, states_list, stop_before_last):
         sending = 0
@@ -65,7 +67,10 @@ class GSCTrading:
             if send_data is not None:
                 next = send_data[length-1]
                 self.swap_byte(next)
+            other_buf = send_data
         else:
+            buf = [next]
+            other_buf = []
             send_buf = [[0,next],[0xFFFF,0xFF],[index]]
             for i in range(length + 1):
                 found = False
@@ -74,12 +79,14 @@ class GSCTrading:
                     received = self.get_trading_data([3,3,1], get_base=False)
                     if received is not None:
                         recv_buf = self.read_entire_data(received)
-                        if recv_buf[i&1] is not None: 
+                        if recv_buf[i&1] is not None:
                             byte_num = recv_buf[i&1][0]
                             if byte_num == i and i != length:
                                 next = self.swap_byte(recv_buf[i&1][1])
                                 send_buf[(i+1)&1][0] = i + 1
                                 send_buf[(i+1)&1][1] = next
+                                buf += [next]
+                                other_buf += [recv_buf[i&1][1]]
                                 found = True
                             elif byte_num == i:
                                 found = True
@@ -87,8 +94,7 @@ class GSCTrading:
                                 found = True
                     if not found:
                         self.sleep_func()
-            buf = None
-        return buf
+        return buf, other_buf
     
     def swap_byte(self, send_data):
         self.sleep_func()
@@ -206,11 +212,11 @@ class GSCTrading:
         self.send_predefined_section(self.gsc_enter_room_states, False)
         
     def trade_starting_sequence(self, buffered, send_data = [None, None, None]):
-        random_data = self.read_section(0, send_data[0], buffered)
-        pokemon_data = self.read_section(1, send_data[1], buffered)
-        mail_data = self.read_section(2, send_data[2], buffered)
+        random_data, random_data_other = self.read_section(0, send_data[0], buffered)
+        pokemon_data, pokemon_data_other = self.read_section(1, send_data[1], buffered)
+        mail_data, mail_data_other = self.read_section(2, send_data[2], buffered)
         
-        return [random_data, pokemon_data, mail_data]
+        return [random_data, pokemon_data, mail_data], [random_data_other, pokemon_data_other, mail_data_other]
         
     def get_trading_data(self, lengths, get_base = True):
         success = True
@@ -248,13 +254,17 @@ class GSCTrading:
             while True:
                 self.send_predefined_section(self.gsc_start_trading_states, True)
                 data, valid = self.get_trading_data(self.gsc_special_sections_len)
-                data = self.trade_starting_sequence(buffered, send_data=data)
+                self.other_pokemon = GSCTradingData(data[1], data[2])
+                data, data_other = self.trade_starting_sequence(buffered, send_data=data)
                 self.send_trading_data(data)
+                self.own_pokemon = GSCTradingData(data[1], data[2])
                 self.do_trade(close=not valid)
         else:
             while True:
                 self.send_predefined_section(self.gsc_start_trading_states, True)
-                data = self.trade_starting_sequence(buffered)
+                data, data_other = self.trade_starting_sequence(buffered)
+                self.own_pokemon = GSCTradingData(data[1], data[2])
+                self.other_pokemon = GSCTradingData(data_other[1], data_other[2])
                 self.do_trade()
             
         
