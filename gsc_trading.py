@@ -1,5 +1,5 @@
 import time
-from gsc_trading_data import *
+from gsc_trading_data_utils import *
 
 class GSCTrading:
 
@@ -22,7 +22,7 @@ class GSCTrading:
         self.fileBaseTargetName = base_no_trade
         self.fileOtherTargetName = target_other
         self.fileSelfTargetName = target_self
-        self.aux_data = GSCAuxData()
+        self.checks = GSCChecks(self.gsc_special_sections_len)
 
     def send_predefined_section(self, states_list, stop_before_last):
         sending = 0
