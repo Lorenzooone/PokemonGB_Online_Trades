@@ -142,7 +142,7 @@ class GSCChecks:
         return self.clean_value(level, self.is_level_valid, 100)
     
     def clean_team_size(self, team_size):
-        return self.clean_value(level, self.is_team_size_valid, 1)
+        return self.clean_value(team_size, self.is_team_size_valid, 1)
     
     def clean_item(self, item):
         return self.clean_value(item, self.is_item_valid, 0)
@@ -163,7 +163,7 @@ class GSCChecks:
         char_val = self.clean_value(char, self.is_char_valid, 0xE6)
         self.curr_text += [char_val]
         # Possibility to put bad words filters here
-        self.prepare_text_reader()
+        self.prepare_text_buffer()
         return char_val
     
     def check_hp(self, val):
@@ -176,7 +176,7 @@ class GSCChecks:
             if self.hps[1] < self.hps[0]:
                 # Possibility to put a warning for bad stats here
                 pass
-            self.curr_pos = 0
+            self.prepare_hp_buffers()
         return val
     
     def clean_value(self, value, checker, default_value):

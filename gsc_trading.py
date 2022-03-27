@@ -9,7 +9,7 @@ class GSCTrading:
     gsc_start_trading_states = [[0x75, 0x75, 0x76, 0xFD], [0x75, 0, 0xFD, 0xFD]]
     gsc_next_section = 0xFD
     gsc_no_input = 0xFE
-    gsc_wait = 0
+    gsc_no_data = 0
     gsc_num_waits = 32
     gsc_special_sections_len = [0xA, 0x1BC, 0x24C]
     gsc_stop_trade = 0x7F
@@ -40,12 +40,16 @@ class GSCTrading:
         next = self.gsc_next_section
 
         if not buffered:
+            # Prepare sanity checks stuff
+            self.checks.prepare_text_buffer()
+            self.checks.prepare_hp_buffers()
+            
             # Wait for a connection to be established
             send_buf = [[0xFFFF,0xFF],[0xFFFF,0xFF],[index]]
             self.send_trading_data(self.write_entire_data(send_buf))
             found = False
             while not found:
-                received = self.get_trading_data([3,3,1], get_base=False)
+                received, valid = self.get_trading_data([3,3,1], get_base=False)
                 if received is not None:
                     recv_buf = self.read_entire_data(received)
                     if recv_buf[1] is not None and recv_buf[1][0] == 0xFFFF and recv_buf[2][0] == index: 
@@ -76,17 +80,18 @@ class GSCTrading:
                 found = False
                 self.send_trading_data(self.write_entire_data(send_buf))
                 while not found:
-                    received = self.get_trading_data([3,3,1], get_base=False)
+                    received, valid = self.get_trading_data([3,3,1], get_base=False)
                     if received is not None:
                         recv_buf = self.read_entire_data(received)
                         if recv_buf[i&1] is not None:
                             byte_num = recv_buf[i&1][0]
                             if byte_num == i and i != length:
-                                next = self.swap_byte(recv_buf[i&1][1])
+                                cleaned_byte = self.checks.checks_map[index][i](recv_buf[i&1][1])
+                                next = self.swap_byte(cleaned_byte)
                                 send_buf[(i+1)&1][0] = i + 1
                                 send_buf[(i+1)&1][1] = next
                                 buf += [next]
-                                other_buf += [recv_buf[i&1][1]]
+                                other_buf += [cleaned_byte]
                                 found = True
                             elif byte_num == i:
                                 found = True
@@ -99,16 +104,18 @@ class GSCTrading:
     def swap_byte(self, send_data):
         self.sleep_func()
         self.sendByte(send_data)
-        return self.receiveByte()
+        recv = self.receiveByte()
+        #print(str(send_data) + " - " + str(recv))
+        return recv
     
-    def read_entire_data(self,data):
+    def read_entire_data(self, data):
         return [self.read_sync_data(data[0]), self.read_sync_data(data[1]), data[2]]
         
-    def write_entire_data(self,data):
+    def write_entire_data(self, data):
         return [self.write_sync_data(data[0]), self.write_sync_data(data[1]), data[2]]
     
-    def read_sync_data(self,data):
-        if len(data) > 0:
+    def read_sync_data(self, data):
+        if data is not None and len(data) > 0:
             return [(data[0]<<8) + data[1], data[2]]
         return None
     
@@ -124,8 +131,13 @@ class GSCTrading:
                 target = 0
 
     def wait_for_input(self, next):
-        while(next == self.gsc_no_input):
+        while(next == self.gsc_no_input or next == self.gsc_no_data):
             next = self.swap_byte(self.gsc_no_input)
+        return next
+
+    def wait_for_no_data(self, next, resent_byte):
+        while(next != self.gsc_no_data):
+            next = self.swap_byte(resent_byte)
         return next
 
     def wait_for_no_input(self, next):
@@ -179,6 +191,7 @@ class GSCTrading:
                 next = self.swap_byte(received_choice)
 
                 # Get whether the trade was declined or not
+                next = self.wait_for_no_data(next, received_choice)
                 next = self.wait_for_no_input(next)
                 accepted = self.wait_for_input(next)
 
@@ -194,6 +207,7 @@ class GSCTrading:
                 # Send the other player's choice to the game
                 next = self.swap_byte(received_accepted)
 
+                next = self.wait_for_no_data(next, received_accepted)
                 next = self.wait_for_no_input(next)
 
                 if not self.is_choice_decline(received_accepted) and not self.is_choice_decline(accepted):

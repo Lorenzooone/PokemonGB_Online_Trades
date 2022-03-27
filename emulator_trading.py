@@ -5,31 +5,29 @@ from gsc_trading import GSCTrading
 
 class PokeTrader:
     SLEEP_TIMER = 0.001
-    _server = None
-    curr_recv = None
 
     def __init__(self):
-        PokeTrader.curr_recv = None
-        PokeTrader._server = BGBLinkCableServer(self.update_data, verbose=False, )
+        self.curr_recv = None
+        self._server = BGBLinkCableServer(self.update_data, verbose=False, )
 
     def run(self):
-        PokeTrader._server.start()
+        self._server.start()
         
     def update_data(self, data):
-        PokeTrader.curr_recv = data
+        self.curr_recv = data
 
     # Code dependant on this connection method
     def sendByte(self, byte_to_send):
-        PokeTrader._server.to_send = byte_to_send
-        while PokeTrader._server.to_send is not None:
-            sleep(PokeTrader.SLEEP_TIMER)
+        self._server.to_send = byte_to_send
+        while self._server.to_send is not None:
+            sleep(self.SLEEP_TIMER)
         return
 
     def receiveByte(self):
-        while PokeTrader.curr_recv is None:
-            sleep(PokeTrader.SLEEP_TIMER)
-        recv = PokeTrader.curr_recv
-        PokeTrader.curr_recv = None
+        while self.curr_recv is None:
+            sleep(self.SLEEP_TIMER)
+        recv = self.curr_recv
+        self.curr_recv = None
         return recv
 
 
