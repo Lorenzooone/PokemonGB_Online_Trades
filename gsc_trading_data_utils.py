@@ -106,10 +106,18 @@ class GSCTradingData:
                 self.pokemon[i].add_mail(data_mail, self.gsc_trading_pokemon_mail_pos + i * self.gsc_trading_mail_length)
                 self.pokemon[i].add_mail_sender(data_mail, self.gsc_trading_pokemon_mail_sender_pos + i * self.gsc_trading_mail_sender_length)
 
+    def check_pos_validity(func):
+        def wrapper(*args, **kwargs):
+            self = args[0]
+            pos = args[1]
+            if pos < 0 or pos >= self.party_info.get_total():
+                print("Index error!")
+                return False
+            return func(*args, **kwargs)
+        return wrapper
+
+    @check_pos_validity
     def mon_has_mail(self, pos):
-        if pos < 0 or pos >= self.party_info.get_total():
-            print("Index error!")
-            return False
         return self.checks.is_item_mail(self.pokemon[pos].get_item())
 
     def party_has_mail(self):
@@ -117,6 +125,20 @@ class GSCTradingData:
         for i in range(self.party_info.get_total()):
             mail_owned |= self.mon_has_mail(i)
         return mail_owned
+    
+    @check_pos_validity
+    def mon_evolves(self, pos):
+        return self.checks.is_evolving(self.pokemon[i].get_species(), self.pokemon[i].get_item())
+    
+    @check_pos_validity
+    def reorder_party(self, traded_pos):
+        pa_info = self.party_info.actual_mons[traded_pos]
+        po_data = self.pokemon[traded_pos]
+        for i in range(traded_pos+1,self.party_info.get_total()):
+            self.party_info.actual_mons[i-1] = self.party_info.actual_mons[i]
+            self.pokemon[i-1] = self.pokemon[i]
+        self.party_info.actual_mons[self.party_info.get_total()-1] = pa_info
+        self.pokemon[self.party_info.get_total()-1] = po_data
 
     def create_trading_data(self):
         data = []
