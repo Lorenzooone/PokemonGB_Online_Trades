@@ -1,23 +1,51 @@
+class GSCUtils:
+    def read_data(target):
+        data = None
+        try:
+            with open(target, 'rb') as newFile:
+                tmpdata = list(newFile.read())
+                data = tmpdata
+        except FileNotFoundError as e:
+            pass
+        return data
+    
+    def read_short(data, pos):
+        return ((data[pos] << 8) + (data[pos+1]))
+    
+    def write_short(data, pos, short_data):
+        data[pos] = (short_data >> 8) & 0xFF
+        data[pos+1] = short_data & 0xFF
+    
+    def copy_to_data(data, pos, values):
+        data[pos:pos+len(values)] = values[:len(values)]
+    
 class GSCTradingText:
     def __init__(self, data, start, length=0xB, data_start=0):
         self.values = data[start:start+length]
         self.start_at = data_start
-        
+    
 class GSCTradingPartyInfo:
     gsc_max_party_mons = 6
     
     def __init__(self, data, start):
         self.total = data[start]
+        if self.total <= 0 or self.total > 6:
+            self.total = 1
         self.actual_mons = data[start + 1:start + 1 + self.gsc_max_party_mons]
     
     def get_indexed_id(self, pos):
         if pos > self.total or pos > self.gsc_max_party_mons:
             return None
         return self.actual_mons[pos-1]
+    
+    def get_total(self):
+        return self.total
 
 class GSCTradingPokémonInfo:
     def __init__(self, data, start, length=0x30):
         self.values = data[start:start+length]
+        self.mail = None
+        self.mail_sender = None
 
     def add_ot_name(self, data, start):
         self.ot_name = GSCTradingText(data, start)
@@ -44,14 +72,15 @@ class GSCTradingPokémonInfo:
         return self.values[0x1F]
     
     def get_curr_hp(self):
-        return ((self.values[0x22] << 8) + (self.values[0x23]))
+        return GSCUtils.read_short(self.values, 0x22)
     
     def get_max_hp(self):
-        return ((self.values[0x24] << 8) + (self.values[0x25]))
+        return GSCUtils.read_short(self.values, 0x24)
 
 class GSCTradingData:
     gsc_trader_name_pos = 0
     gsc_trading_party_info_pos = 0xB
+    gsc_trader_info_pos = 0x13
     gsc_trading_pokemon_pos = 0x15
     gsc_trading_pokemon_ot_pos = 0x135
     gsc_trading_pokemon_nickname_pos = 0x167
@@ -63,17 +92,51 @@ class GSCTradingData:
     gsc_trading_mail_length = 0x21
     gsc_trading_mail_sender_length = 0xE
     
-    def __init__(self, data_pokemon, data_mail):
+    def __init__(self, checks, data_pokemon, data_mail=None):
+        self.checks = checks
         self.trader = GSCTradingText(data_pokemon, self.gsc_trader_name_pos)
         self.party_info = GSCTradingPartyInfo(data_pokemon, self.gsc_trading_party_info_pos)
+        self.trader_info = GSCUtils.read_short(data_pokemon, self.gsc_trader_info_pos)
         self.pokemon = []
-        for i in range(6):
+        for i in range(self.party_info.get_total()):
             self.pokemon += [GSCTradingPokémonInfo(data_pokemon, self.gsc_trading_pokemon_pos + i * self.gsc_trading_pokemon_length)]
             self.pokemon[i].add_ot_name(data_pokemon, self.gsc_trading_pokemon_ot_pos + i * self.gsc_trading_name_length)
             self.pokemon[i].add_nickname(data_pokemon, self.gsc_trading_pokemon_nickname_pos + i * self.gsc_trading_name_length)
-            self.pokemon[i].add_mail(data_mail, self.gsc_trading_pokemon_mail_pos + i * self.gsc_trading_mail_length)
-            self.pokemon[i].add_mail_sender(data_mail, self.gsc_trading_pokemon_mail_sender_pos + i * self.gsc_trading_mail_sender_length)
+            if data_mail is not None and self.mon_has_mail(i):
+                self.pokemon[i].add_mail(data_mail, self.gsc_trading_pokemon_mail_pos + i * self.gsc_trading_mail_length)
+                self.pokemon[i].add_mail_sender(data_mail, self.gsc_trading_pokemon_mail_sender_pos + i * self.gsc_trading_mail_sender_length)
 
+    def mon_has_mail(self, pos):
+        if pos < 0 or pos >= self.party_info.get_total():
+            print("Index error!")
+            return False
+        return self.checks.is_item_mail(self.pokemon[pos].get_item())
+
+    def party_has_mail(self):
+        mail_owned = False
+        for i in range(self.party_info.get_total()):
+            mail_owned |= self.mon_has_mail(i)
+        return mail_owned
+
+    def create_trading_data(self):
+        data = []
+        for i in range(2):
+            data += [GSCTrading.gsc_special_sections_len[i]*[0]]
+        data += [self.checks.no_mail_section[:len(self.checks.no_mail_section)]]
+        GSCUtils.copy_to_data(data[1], self.gsc_trader_name_pos, self.trader.values)
+        data[1][self.gsc_trading_party_info_pos] = self.party_info.get_total()
+        GSCUtils.copy_to_data(data[1], self.gsc_trading_party_info_pos + 1, self.party_info.actual_mons)
+        data[1][0x12] = 0xFF
+        GSCUtils.write_short(data[1], self.gsc_trader_info_pos, self.trader_info)
+        for i in range(self.party_info.get_total()):
+            GSCUtils.copy_to_data(data[1], self.gsc_trading_pokemon_pos + (i * self.gsc_trading_pokemon_length), self.pokemon[i].values)
+            GSCUtils.copy_to_data(data[1], self.gsc_trading_pokemon_ot_pos + (i * self.gsc_trading_name_length), self.pokemon[i].ot_name.values)
+            GSCUtils.copy_to_data(data[1], self.gsc_trading_pokemon_nickname_pos + (i * self.gsc_trading_name_length), self.pokemon[i].nickname.values)
+            if self.pokemon[i].mail is not None:
+                GSCUtils.copy_to_data(data[2], self.gsc_trading_pokemon_mail_pos + (i * self.gsc_trading_mail_length), self.pokemon[i].mail.values)
+                GSCUtils.copy_to_data(data[2], self.gsc_trading_pokemon_mail_sender_pos + (i * self.gsc_trading_mail_sender_length), self.pokemon[i].mail_sender.values)
+        return data
+    
 class GSCChecks:
     bad_ids_items_path = "useful_data/bad_ids_items.bin"
     bad_ids_moves_path = "useful_data/bad_ids_moves.bin"
@@ -82,18 +145,20 @@ class GSCChecks:
     evolution_ids_path = "useful_data/evolution_ids.bin"
     mail_ids_path = "useful_data/ids_mail.bin"
     checks_map_path = "useful_data/checks_map.bin"
+    no_mail_path = "useful_data/no_mail_section.bin"
     everstone_id = 0x70
     
     def __init__(self, section_sizes):
         self.do_sanity_checks = True
-        self.bad_ids_items = self.prepare_check_list(self.read_data(self.bad_ids_items_path))
-        self.bad_ids_moves = self.prepare_check_list(self.read_data(self.bad_ids_moves_path))
-        self.bad_ids_pokemon = self.prepare_check_list(self.read_data(self.bad_ids_pokemon_path))
-        self.bad_ids_text = self.prepare_check_list(self.read_data(self.bad_ids_text_path))
-        self.mail_ids = self.prepare_check_list(self.read_data(self.mail_ids_path))
-        self.evolution_ids = self.prepare_evolution_check_list(self.read_data(self.evolution_ids_path))
+        self.bad_ids_items = self.prepare_check_list(GSCUtils.read_data(self.bad_ids_items_path))
+        self.bad_ids_moves = self.prepare_check_list(GSCUtils.read_data(self.bad_ids_moves_path))
+        self.bad_ids_pokemon = self.prepare_check_list(GSCUtils.read_data(self.bad_ids_pokemon_path))
+        self.bad_ids_text = self.prepare_check_list(GSCUtils.read_data(self.bad_ids_text_path))
+        self.mail_ids = self.prepare_check_list(GSCUtils.read_data(self.mail_ids_path))
+        self.evolution_ids = self.prepare_evolution_check_list(GSCUtils.read_data(self.evolution_ids_path))
         self.check_functions = [self.clean_nothing, self.clean_text, self.clean_team_size, self.clean_species, self.clean_move, self.clean_item, self.clean_level, self.check_hp, self.clean_text_final]
-        self.checks_map = self.prepare_checks_map(self.read_data(self.checks_map_path), section_sizes)
+        self.checks_map = self.prepare_checks_map(GSCUtils.read_data(self.checks_map_path), section_sizes)
+        self.no_mail_section = GSCUtils.read_data(self.no_mail_path)
     
     def set_sanity_checks(self, new_val):
         self.do_sanity_checks = new_val
@@ -226,13 +291,3 @@ class GSCChecks:
                 if (evo_info[1] is None) or (item == evo_info[1]):
                     return True
         return False
-
-    def read_data(self, target):
-        data = None
-        try:
-            with open(target, 'rb') as newFile:
-                tmpdata = list(newFile.read())
-                data = tmpdata
-        except FileNotFoundError as e:
-            pass
-        return data

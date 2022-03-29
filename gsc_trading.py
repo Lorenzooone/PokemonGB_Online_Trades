@@ -121,6 +121,14 @@ class GSCTrading:
     
     def write_sync_data(self, data):
         return [(data[0]>>8)&0xFF, data[0]&0xFF, data[1]]
+    
+    def get_mail_data_only(self):
+        print("IMPLEMENT get_mail_data_only !!!")
+        return self.checks.no_mail_section
+        
+    def send_mail_data_only(self, data):
+        print("IMPLEMENT send_mail_data_only !!!")
+        pass
 
     def end_trade(self):
         next = 0
@@ -228,7 +236,25 @@ class GSCTrading:
     def trade_starting_sequence(self, buffered, send_data = [None, None, None]):
         random_data, random_data_other = self.read_section(0, send_data[0], buffered)
         pokemon_data, pokemon_data_other = self.read_section(1, send_data[1], buffered)
-        mail_data, mail_data_other = self.read_section(2, send_data[2], buffered)
+        
+        # Trade mail data only if needed
+        pokemon_own = GSCTradingData(self.checks, pokemon_data)
+        pokemon_other = GSCTradingData(self.checks, pokemon_data_other)
+        pokemon_own_mail = pokemon_own.party_has_mail()
+        pokemon_other_mail = pokemon_other.party_has_mail()
+        
+        if not pokemon_own_mail and not pokemon_other_mail:
+            mail_data, mail_data_other = self.read_section(2, self.checks.no_mail_section, True)
+        elif pokemon_own_mail and not pokemon_other_mail:
+            mail_data, mail_data_other = self.read_section(2, self.checks.no_mail_section, True)
+            if not buffered:
+                self.send_mail_data_only(mail_data)
+        elif not pokemon_own_mail and pokemon_other_mail:
+            if not buffered:
+                send_data[2] = self.get_mail_data_only()
+            mail_data, mail_data_other = self.read_section(2, send_data[2], True)
+        else:
+            mail_data, mail_data_other = self.read_section(2, send_data[2], buffered)
         
         return [random_data, pokemon_data, mail_data], [random_data_other, pokemon_data_other, mail_data_other]
         
@@ -268,17 +294,17 @@ class GSCTrading:
             while True:
                 self.send_predefined_section(self.gsc_start_trading_states, True)
                 data, valid = self.get_trading_data(self.gsc_special_sections_len)
-                self.other_pokemon = GSCTradingData(data[1], data[2])
+                self.other_pokemon = GSCTradingData(self.checks, data[1], data_mail=data[2])
                 data, data_other = self.trade_starting_sequence(buffered, send_data=data)
                 self.send_trading_data(data)
-                self.own_pokemon = GSCTradingData(data[1], data[2])
+                self.own_pokemon = GSCTradingData(self.checks, data[1], data_mail=data[2])
                 self.do_trade(close=not valid)
         else:
             while True:
                 self.send_predefined_section(self.gsc_start_trading_states, True)
                 data, data_other = self.trade_starting_sequence(buffered)
-                self.own_pokemon = GSCTradingData(data[1], data[2])
-                self.other_pokemon = GSCTradingData(data_other[1], data_other[2])
+                self.own_pokemon = GSCTradingData(self.checks, data[1], data_mail=data[2])
+                self.other_pokemon = GSCTradingData(self.checks, data_other[1], data_mail=data_other[2])
                 self.do_trade()
             
         
