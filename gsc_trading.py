@@ -13,6 +13,7 @@ class GSCTrading:
     gsc_num_waits = 32
     gsc_special_sections_len = [0xA, 0x1BC, 0x24C]
     gsc_stop_trade = 0x7F
+    gsc_first_trade_index = 0x70
     gsc_decline_trade = 0x71
     gsc_accept_trade = 0x72
     
@@ -163,11 +164,14 @@ class GSCTrading:
         if choice == self.gsc_decline_trade:
             return True
         return False
+    
+    def convert_choice(self, choice):
+        return choice - self.gsc_first_trade_index
                 
     def get_chosen_mon(self, close):
         if close:
             return self.gsc_stop_trade
-        return 0x70
+        return self.gsc_first_trade_index
         
     def send_chosen_mon(self, choice):
         return not self.is_choice_stop(choice)
@@ -219,6 +223,11 @@ class GSCTrading:
                 next = self.wait_for_no_input(next)
 
                 if not self.is_choice_decline(received_accepted) and not self.is_choice_decline(accepted):
+                    # Apply the trade to the data
+                    self.own_pokemon.trade_mon(self.other_pokemon, self.convert_choice(sent_mon), self.convert_choice(received_choice))
+                    self.own_blank_trade = self.own_pokemon.mon_evolves()
+                    self.other_blank_trade = self.other_pokemon.mon_evolves()
+                    
                     # Conclude the trade successfully
                     next = self.wait_for_input(next)
 
@@ -287,26 +296,48 @@ class GSCTrading:
         except FileNotFoundError as e:
             pass
         return data
+    
+    def synchronous_trade(self):
+        data, data_other = self.trade_starting_sequence(False)
+        self.own_pokemon = GSCTradingData(self.checks, data[1], data_mail=data[2])
+        self.other_pokemon = GSCTradingData(self.checks, data_other[1], data_mail=data_other[2])
+        return True
+    
+    def buffered_trade(self):
+        data, valid = self.get_trading_data(self.gsc_special_sections_len)
+        self.other_pokemon = GSCTradingData(self.checks, data[1], data_mail=data[2])
+        data, data_other = self.trade_starting_sequence(True, send_data=data)
+        self.send_trading_data(data)
+        self.own_pokemon = GSCTradingData(self.checks, data[1], data_mail=data[2])
+        return valid
 
     def trade(self, buffered = True):
+        self.own_blank_trade = True
+        self.other_blank_trade = True
         self.enter_room()
-        if buffered:
-            while True:
-                self.send_predefined_section(self.gsc_start_trading_states, True)
-                data, valid = self.get_trading_data(self.gsc_special_sections_len)
-                self.other_pokemon = GSCTradingData(self.checks, data[1], data_mail=data[2])
-                data, data_other = self.trade_starting_sequence(buffered, send_data=data)
+        while True:
+            self.send_predefined_section(self.gsc_start_trading_states, True)
+            if self.own_blank_trade and self.other_blank_trade:
+                if buffered:
+                    valid = self.buffered_trade()
+                else:
+                    valid = self.synchronous_trade()
+            elif self.own_blank_trade:
+                data, data_other = self.trade_starting_sequence(True, send_data=self.other_pokemon.create_trading_data(GSCTrading.gsc_special_sections_len))
+                self.own_pokemon = GSCTradingData(self.checks, data[1], data_mail=data[2])
                 self.send_trading_data(data)
-                self.own_pokemon = GSCTradingData(self.checks, data[1], data_mail=data[2])
-                self.do_trade(close=not valid)
-        else:
-            while True:
-                self.send_predefined_section(self.gsc_start_trading_states, True)
-                data, data_other = self.trade_starting_sequence(buffered)
-                self.own_pokemon = GSCTradingData(self.checks, data[1], data_mail=data[2])
+            elif self.other_blank_trade:
+                valid = False
+                while not valid:
+                    self.sleep_func()
+                    data, valid = self.get_trading_data(self.gsc_special_sections_len)
+                data, data_other = self.trade_starting_sequence(True, send_data=data)
                 self.other_pokemon = GSCTradingData(self.checks, data_other[1], data_mail=data_other[2])
-                self.do_trade()
-            
+            else:
+                data, data_other = self.trade_starting_sequence(True, send_data=self.other_pokemon.create_trading_data(GSCTrading.gsc_special_sections_len))
+            self.own_blank_trade = True
+            self.other_blank_trade = True
+            self.do_trade(close=not valid)
         
     # Function needed in order to make sure there is enough time for the slave to prepare the next byte.
     def sleep_func(self, multiplier = 1):

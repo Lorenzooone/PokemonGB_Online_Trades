@@ -83,7 +83,7 @@ class GSCTradingData:
     gsc_trader_info_pos = 0x13
     gsc_trading_pokemon_pos = 0x15
     gsc_trading_pokemon_ot_pos = 0x135
-    gsc_trading_pokemon_nickname_pos = 0x167
+    gsc_trading_pokemon_nickname_pos = 0x177
     gsc_trading_pokemon_mail_pos = 0xCB
     gsc_trading_pokemon_mail_sender_pos = 0x191
     
@@ -125,10 +125,18 @@ class GSCTradingData:
         for i in range(self.party_info.get_total()):
             mail_owned |= self.mon_has_mail(i)
         return mail_owned
+        
+    def mon_evolves(self):
+        return self.checks.is_evolving(self.pokemon[self.party_info.get_total()-1].get_species(), self.pokemon[self.party_info.get_total()-1].get_item())
     
-    @check_pos_validity
-    def mon_evolves(self, pos):
-        return self.checks.is_evolving(self.pokemon[i].get_species(), self.pokemon[i].get_item())
+    def trade_mon(self, other, own_index, other_index):
+        self.reorder_party(own_index)
+        other.reorder_party(other_index)
+        own = self.pokemon[self.party_info.get_total()-1]
+        self.pokemon[self.party_info.get_total()-1] = other.pokemon[other.party_info.get_total()-1]
+        other.pokemon[other.party_info.get_total()-1] = own
+        self.party_info.actual_mons[self.party_info.get_total()-1] = self.pokemon[self.party_info.get_total()-1].get_species()
+        other.party_info.actual_mons[other.party_info.get_total()-1] = other.pokemon[other.party_info.get_total()-1].get_species()
     
     @check_pos_validity
     def reorder_party(self, traded_pos):
@@ -140,10 +148,10 @@ class GSCTradingData:
         self.party_info.actual_mons[self.party_info.get_total()-1] = pa_info
         self.pokemon[self.party_info.get_total()-1] = po_data
 
-    def create_trading_data(self):
+    def create_trading_data(self, lengths):
         data = []
         for i in range(2):
-            data += [GSCTrading.gsc_special_sections_len[i]*[0]]
+            data += [lengths[i]*[0]]
         data += [self.checks.no_mail_section[:len(self.checks.no_mail_section)]]
         GSCUtils.copy_to_data(data[1], self.gsc_trader_name_pos, self.trader.values)
         data[1][self.gsc_trading_party_info_pos] = self.party_info.get_total()
