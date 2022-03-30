@@ -265,7 +265,8 @@ class GSCChecks:
     
     @clean_check_sanity_checks
     def clean_team_size(self, team_size):
-        return self.clean_value(team_size, self.is_team_size_valid, 1)
+        self.team_size = self.clean_value(team_size, self.is_team_size_valid, 1)
+        return self.team_size
     
     @clean_check_sanity_checks
     def clean_item(self, item):
@@ -289,7 +290,7 @@ class GSCChecks:
     
     @clean_check_sanity_checks
     def clean_species_sp(self, species):
-        if species == 0xFF and self.curr_species_pos != 0:
+        if species == 0xFF and self.curr_species_pos >= self.team_size:
             self.curr_species_pos += 1
             return species
         found_species = self.clean_value(species, self.is_species_valid, 0x13)
