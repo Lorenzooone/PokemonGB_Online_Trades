@@ -39,11 +39,12 @@ class GSCTrading:
     def read_section(self, index, send_data, buffered):
         length = self.gsc_special_sections_len[index]
         next = self.gsc_next_section
+        
+        # Prepare sanity checks stuff
+        self.checks.prepare_text_buffer()
+        self.checks.prepare_species_buffer()
 
         if not buffered:
-            # Prepare sanity checks stuff
-            self.checks.prepare_text_buffer()
-            
             # Wait for a connection to be established
             send_buf = [[0xFFFF,0xFF],[0xFFFF,0xFF],[index]]
             self.send_trading_data(self.write_entire_data(send_buf))
@@ -64,13 +65,15 @@ class GSCTrading:
             buf = [next]
             for i in range(length-1):
                 if send_data is not None:
-                    next = send_data[i]
+                    next = self.checks.checks_map[index][i](send_data[i])
+                    send_data[i] = next
                 next = self.swap_byte(next)
                 buf += [next]
             
             if send_data is not None:
-                next = send_data[length-1]
-                self.swap_byte(next)
+                next = self.checks.checks_map[index][length-1](send_data[length-1])
+                send_data[length-1] = next
+            self.swap_byte(next)
             other_buf = send_data
         else:
             buf = [next]
@@ -304,10 +307,10 @@ class GSCTrading:
     
     def buffered_trade(self):
         data, valid = self.get_trading_data(self.gsc_special_sections_len)
-        self.other_pokemon = GSCTradingData(self.checks, data[1], data_mail=data[2])
         data, data_other = self.trade_starting_sequence(True, send_data=data)
         self.send_trading_data(data)
         self.own_pokemon = GSCTradingData(self.checks, data[1], data_mail=data[2])
+        self.other_pokemon = GSCTradingData(self.checks, data_other[1], data_mail=data_other[2])
         return valid
 
     def trade(self, buffered = True):

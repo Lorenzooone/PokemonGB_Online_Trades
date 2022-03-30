@@ -193,7 +193,7 @@ class GSCChecks:
         self.bad_ids_text = self.prepare_check_list(GSCUtils.read_data(self.bad_ids_text_path))
         self.mail_ids = self.prepare_check_list(GSCUtils.read_data(self.mail_ids_path))
         self.evolution_ids = self.prepare_evolution_check_list(GSCUtils.read_data(self.evolution_ids_path))
-        self.check_functions = [self.clean_nothing, self.clean_text, self.clean_team_size, self.clean_species, self.clean_move, self.clean_item, self.clean_level, self.check_hp, self.clean_text_final, self.load_stat_exp, self.load_stat_iv, self.check_stat]
+        self.check_functions = [self.clean_nothing, self.clean_text, self.clean_team_size, self.clean_species, self.clean_move, self.clean_item, self.clean_level, self.check_hp, self.clean_text_final, self.load_stat_exp, self.load_stat_iv, self.check_stat, self.clean_species_sp]
         self.checks_map = self.prepare_checks_map(GSCUtils.read_data(self.checks_map_path), section_sizes)
         self.no_mail_section = GSCUtils.read_data(self.no_mail_path)
         self.base_stats = self.prepare_stats(GSCUtils.read_data(self.base_stats_path))
@@ -204,7 +204,7 @@ class GSCChecks:
             val = args[1]
             if self.do_sanity_checks:
                 return func(*args, **kwargs)
-            else
+            else:
                 return val
         return wrapper
         
@@ -219,6 +219,9 @@ class GSCChecks:
     
     def prepare_text_buffer(self):
         self.curr_text = []
+        
+    def prepare_species_buffer(self):
+        self.curr_species_pos = 0
 
     def prepare_check_list(self, data):
         ret = [False] * 0x100
@@ -283,6 +286,15 @@ class GSCChecks:
         self.curr_exp_id = 0
         self.curr_exp_pos = 0
         return self.curr_species
+    
+    @clean_check_sanity_checks
+    def clean_species_sp(self, species):
+        if species == 0xFF and self.curr_species_pos != 0:
+            self.curr_species_pos += 1
+            return species
+        found_species = self.clean_value(species, self.is_species_valid, 0x13)
+        self.curr_species_pos += 1
+        return found_species
     
     @clean_check_sanity_checks
     def load_stat_exp(self, val):
