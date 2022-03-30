@@ -43,7 +43,6 @@ class GSCTrading:
         if not buffered:
             # Prepare sanity checks stuff
             self.checks.prepare_text_buffer()
-            self.checks.prepare_hp_buffers()
             
             # Wait for a connection to be established
             send_buf = [[0xFFFF,0xFF],[0xFFFF,0xFF],[index]]

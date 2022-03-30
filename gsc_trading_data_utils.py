@@ -1,3 +1,4 @@
+import math
 class GSCUtils:
     def read_data(target):
         data = None
@@ -176,7 +177,13 @@ class GSCChecks:
     mail_ids_path = "useful_data/ids_mail.bin"
     checks_map_path = "useful_data/checks_map.bin"
     no_mail_path = "useful_data/no_mail_section.bin"
+    base_stats_path = "useful_data/stats_gsc.bin"
     everstone_id = 0x70
+    hp_stat_id = 0
+    stat_id_base_conv_table = [0,1,2,5,3,4]
+    stat_id_iv_conv_table = [0,0,1,2,3,3]
+    stat_id_exp_conv_table = [0,1,2,3,4,4]
+    spdef_stat_id = 5
     
     def __init__(self, section_sizes):
         self.do_sanity_checks = True
@@ -186,18 +193,32 @@ class GSCChecks:
         self.bad_ids_text = self.prepare_check_list(GSCUtils.read_data(self.bad_ids_text_path))
         self.mail_ids = self.prepare_check_list(GSCUtils.read_data(self.mail_ids_path))
         self.evolution_ids = self.prepare_evolution_check_list(GSCUtils.read_data(self.evolution_ids_path))
-        self.check_functions = [self.clean_nothing, self.clean_text, self.clean_team_size, self.clean_species, self.clean_move, self.clean_item, self.clean_level, self.check_hp, self.clean_text_final]
+        self.check_functions = [self.clean_nothing, self.clean_text, self.clean_team_size, self.clean_species, self.clean_move, self.clean_item, self.clean_level, self.check_hp, self.clean_text_final, self.load_stat_exp, self.load_stat_iv, self.check_stat]
         self.checks_map = self.prepare_checks_map(GSCUtils.read_data(self.checks_map_path), section_sizes)
         self.no_mail_section = GSCUtils.read_data(self.no_mail_path)
+        self.base_stats = self.prepare_stats(GSCUtils.read_data(self.base_stats_path))
+    
+    def clean_check_sanity_checks(func):
+        def wrapper(*args, **kwargs):
+            self = args[0]
+            val = args[1]
+            if self.do_sanity_checks:
+                return func(*args, **kwargs)
+            else
+                return val
+        return wrapper
+        
+    def prepare_stats(self, data):
+        ret = [0] * 0x100
+        for i in range(0x100):
+            ret[i] = data[(i)*6:(i+1)*6]
+        return ret
     
     def set_sanity_checks(self, new_val):
         self.do_sanity_checks = new_val
     
     def prepare_text_buffer(self):
         self.curr_text = []
-        
-    def prepare_hp_buffers(self):
-        self.curr_pos = 0
 
     def prepare_check_list(self, data):
         ret = [False] * 0x100
@@ -230,30 +251,67 @@ class GSCChecks:
             return False
         return checking_list[value]
     
+    @clean_check_sanity_checks
     def clean_nothing(self, val):
         return val
     
+    @clean_check_sanity_checks
     def clean_level(self, level):
-        return self.clean_value(level, self.is_level_valid, 100)
+        self.level = self.clean_value(level, self.is_level_valid, 100)
+        return self.level
     
+    @clean_check_sanity_checks
     def clean_team_size(self, team_size):
         return self.clean_value(team_size, self.is_team_size_valid, 1)
     
+    @clean_check_sanity_checks
     def clean_item(self, item):
         return self.clean_value(item, self.is_item_valid, 0)
     
+    @clean_check_sanity_checks
     def clean_move(self, move):
         return self.clean_value(move, self.is_move_valid, 0x21)
     
+    @clean_check_sanity_checks
     def clean_species(self, species):
-        return self.clean_value(species, self.is_species_valid, 0x13)
+        self.curr_species = self.clean_value(species, self.is_species_valid, 0x13)
+        self.curr_stat_id = 1
+        self.iv = [0,0,0,0]
+        self.stat_exp = [0,0,0,0,0]
+        self.curr_pos = 0
+        self.curr_iv_pos = 0
+        self.curr_exp_id = 0
+        self.curr_exp_pos = 0
+        return self.curr_species
     
+    @clean_check_sanity_checks
+    def load_stat_exp(self, val):
+        calc_val = val << (8 * self.curr_exp_pos)
+        if self.curr_exp_pos == 0:
+            self.stat_exp[self.curr_exp_id] = calc_val
+            self.curr_exp_pos += 1
+        else:
+            self.stat_exp[self.curr_exp_id] |= calc_val
+            self.curr_exp_pos = 0
+            self.curr_exp_id += 1
+        return val
+    
+    @clean_check_sanity_checks
+    def load_stat_iv(self, val):
+        calc_val = [(val&0xF0) >> 4, val & 0xF]
+        self.iv[self.curr_iv_pos*2] = calc_val[0]
+        self.iv[(self.curr_iv_pos*2) + 1] = calc_val[1]
+        self.curr_iv_pos += 1
+        return val
+    
+    @clean_check_sanity_checks
     def clean_text(self, char):
         char_val = self.clean_value(char, self.is_char_valid, 0xE6)
         self.curr_text += [char_val]
         # Possibility to put bad words filters here
         return char_val
     
+    @clean_check_sanity_checks
     def clean_text_final(self, char):
         char_val = self.clean_value(char, self.is_char_valid, 0xE6)
         self.curr_text += [char_val]
@@ -261,17 +319,64 @@ class GSCChecks:
         self.prepare_text_buffer()
         return char_val
     
+    def final_stat_calc_step(self, stat_id):
+        if stat_id != self.hp_stat_id:
+            return 5
+        return self.level + 10
+    
+    def get_iv(self, stat_id):
+        if stat_id != self.hp_stat_id:
+            return self.iv[self.stat_id_iv_conv_table[stat_id]]
+        return ((self.iv[0]&1)<<3) | ((self.iv[1]&1)<<2) | ((self.iv[2]&1)<<1) | (self.iv[3]&1)
+    
+    def get_exp(self, stat_id):
+        return self.stat_exp[self.stat_id_exp_conv_table[stat_id]]
+    
+    def get_base_stat(self, stat_id):
+        return self.base_stats[self.curr_species][self.stat_id_base_conv_table[stat_id]]
+    
+    def stat_calculation(self, stat_id, do_exp=True):
+        inter_value = (self.get_base_stat(stat_id) + self.get_iv(stat_id)) * 2
+        if do_exp:
+            inter_value += math.floor(math.ceil(math.sqrt(self.get_exp(stat_id))/4))
+        inter_value = math.floor((inter_value*self.level)/100)
+        return inter_value + self.final_stat_calc_step(stat_id)
+    
+    def check_stat_range(self, stat_range, curr_stat, pos):
+        if curr_stat > stat_range[1]:
+            curr_stat = stat_range[1]
+        if curr_stat < stat_range[0]:
+            curr_stat = stat_range[0]
+        return curr_stat
+    
+    @clean_check_sanity_checks
+    def check_stat(self, val):
+        if self.curr_pos == 0:
+            self.stat = 0
+            self.stat_range = [self.stat_calculation(self.curr_stat_id, do_exp=False), self.stat_calculation(self.curr_stat_id)]
+        curr_read_val = val << (8 * (1 - (self.curr_pos & 1)))
+        self.stat = self.check_stat_range(self.stat_range, (self.stat & 0xFF00) | curr_read_val, self.curr_pos)
+        val = (self.stat >> (8 * (1 - (self.curr_pos & 1)))) & 0xFF
+        self.curr_pos += 1
+        if self.curr_pos >= 2:
+            self.curr_stat_id += 1
+            self.curr_pos = 0
+        return val
+    
+    @clean_check_sanity_checks
     def check_hp(self, val):
         if self.curr_pos == 0:
             self.hps = [0,0]
-        curr_read_val = val << (8 * (self.curr_pos & 2))
-        self.hps[self.curr_pos >> 1] |= curr_read_val
+            self.hps_range = [self.stat_calculation(self.hp_stat_id, do_exp=False), self.stat_calculation(self.hp_stat_id)]
+        curr_read_val = val << (8 * (1 - (self.curr_pos & 1)))
+        self.hps[self.curr_pos >> 1] = self.check_stat_range(self.hps_range, (self.hps[self.curr_pos >> 1] & 0xFF00) | curr_read_val, self.curr_pos)
+        val = (self.hps[self.curr_pos >> 1] >> (8 * (1 - (self.curr_pos & 1)))) & 0xFF
         self.curr_pos += 1
         if self.curr_pos >= 4:
             if self.hps[1] < self.hps[0]:
                 # Possibility to put a warning for bad stats here
                 pass
-            self.prepare_hp_buffers()
+            self.curr_pos = 0
         return val
     
     def clean_value(self, value, checker, default_value):
@@ -280,7 +385,7 @@ class GSCChecks:
         return default_value
         
     def is_level_valid(self, level):
-        if self.do_sanity_checks and level <= 0 or level > 100:
+        if self.do_sanity_checks and level <= 1 or level > 100:
             return False
         return True
     
