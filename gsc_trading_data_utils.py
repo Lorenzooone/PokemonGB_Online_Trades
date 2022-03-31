@@ -20,6 +20,21 @@ class GSCUtils:
     def copy_to_data(data, pos, values):
         data[pos:pos+len(values)] = values[:len(values)]
     
+    def prepare_dict(target):
+        lines = GSCUtils.read_text_file(target)
+        dict = {}
+        for i in lines:
+            dict[i.split()[0]] = int(i.split()[1])
+        return dict
+    
+    def read_text_file(target):
+        try:
+            with open(target,"r", encoding="utf-8") as f:
+                lines=f.readlines()
+        except FileNotFoundError as e:
+            return []
+        return lines
+    
 class GSCTradingText:
     def __init__(self, data, start, length=0xB, data_start=0):
         self.values = data[start:start+length]
@@ -178,6 +193,10 @@ class GSCChecks:
     checks_map_path = "useful_data/checks_map.bin"
     no_mail_path = "useful_data/no_mail_section.bin"
     base_stats_path = "useful_data/stats_gsc.bin"
+    text_conv_path = "useful_data/text_conv.txt"
+    pokemon_names_gs_path = "useful_data/pokemon_names_gs.txt"
+    end_of_line = 0x50
+    name_size = 0xB
     everstone_id = 0x70
     hp_stat_id = 0
     stat_id_base_conv_table = [0,1,2,5,3,4]
@@ -197,6 +216,7 @@ class GSCChecks:
         self.checks_map = self.prepare_checks_map(GSCUtils.read_data(self.checks_map_path), section_sizes)
         self.no_mail_section = GSCUtils.read_data(self.no_mail_path)
         self.base_stats = self.prepare_stats(GSCUtils.read_data(self.base_stats_path))
+        self.pokemon_names_gs = self.text_to_bytes(self.pokemon_names_gs_path, self.text_conv_path)
     
     def clean_check_sanity_checks(func):
         def wrapper(*args, **kwargs):
@@ -207,7 +227,22 @@ class GSCChecks:
             else:
                 return val
         return wrapper
-        
+
+    def text_to_bytes(self, target, text_conv_target):
+        names = GSCUtils.read_text_file(target)
+        text_conv_dict = GSCUtils.prepare_dict(text_conv_target)
+        text_conv_dict['\n'] = self.end_of_line
+        byte_names = []
+        for i in range(0x100):
+            byte_names += [[self.end_of_line]*self.name_size]
+            for j in range(len(names[i])):
+                letter = names[i][j].upper()
+                if letter in text_conv_dict:
+                    byte_names[i][j] = text_conv_dict[letter]
+                else:
+                    print("UNRECOGNIZED CHARACTER: " + letter)
+        return byte_names
+
     def prepare_stats(self, data):
         ret = [0] * 0x100
         for i in range(0x100):
