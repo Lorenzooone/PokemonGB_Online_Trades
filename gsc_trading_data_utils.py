@@ -6,6 +6,7 @@ class GSCUtils:
     base_stats_path = "useful_data/stats_gsc.bin"
     text_conv_path = "useful_data/text_conv.txt"
     pokemon_names_gs_path = "useful_data/pokemon_names_gs.txt"
+    moves_pp_list_path = "useful_data/moves_pp_list.bin"
     everstone_id = 0x70
     end_of_line = 0x50
     name_size = 0xB
@@ -19,6 +20,7 @@ class GSCUtils:
     base_stats = None
     pokemon_names_gs = None
     no_mail_section = None
+    moves_pp_list = None
     
     def __init__(self):
         if GSCUtils.evolution_ids is None:
@@ -31,6 +33,8 @@ class GSCUtils:
             GSCUtils.base_stats = GSCUtils.prepare_stats(GSCUtils.read_data(GSCUtils.base_stats_path))
         if GSCUtils.pokemon_names_gs is None:
             GSCUtils.pokemon_names_gs = GSCUtils.text_to_bytes(GSCUtils.pokemon_names_gs_path, GSCUtils.text_conv_path)
+        if GSCUtils.moves_pp_list is None:
+            GSCUtils.moves_pp_list = GSCUtils.read_data(GSCUtils.moves_pp_list_path)
     
     def read_data(target):
         data = None
@@ -370,7 +374,7 @@ class GSCChecks:
         self.bad_ids_moves = GSCUtils.prepare_check_list(GSCUtils.read_data(self.bad_ids_moves_path))
         self.bad_ids_pokemon = GSCUtils.prepare_check_list(GSCUtils.read_data(self.bad_ids_pokemon_path))
         self.bad_ids_text = GSCUtils.prepare_check_list(GSCUtils.read_data(self.bad_ids_text_path))
-        self.check_functions = [self.clean_nothing, self.clean_text, self.clean_team_size, self.clean_species, self.clean_move, self.clean_item, self.clean_level, self.check_hp, self.clean_text_final, self.load_stat_exp, self.load_stat_iv, self.check_stat, self.clean_species_sp]
+        self.check_functions = [self.clean_nothing, self.clean_text, self.clean_team_size, self.clean_species, self.clean_move, self.clean_item, self.clean_level, self.check_hp, self.clean_text_final, self.load_stat_exp, self.load_stat_iv, self.check_stat, self.clean_species_sp, self.clean_pp]
         self.checks_map = self.prepare_checks_map(GSCUtils.read_data(self.checks_map_path), section_sizes)
     
     def clean_check_sanity_checks(func):
@@ -419,8 +423,25 @@ class GSCChecks:
         return self.clean_value(item, self.is_item_valid, 0)
     
     @clean_check_sanity_checks
+    def clean_pp(self, pp):
+        current_pp = pp & 0x3F
+        pp_ups = (pp >> 6) & 3
+        max_base_pp = GSCUtils.moves_pp_list[self.moves[self.curr_pp]]
+        max_pp = max_base_pp + (math.floor(max_base_pp/5) * pp_ups)
+        if max_pp > 61:
+            max_pp = 61
+        final_pp = pp
+        if current_pp > max_pp:
+            final_pp = (pp_ups << 6) | max_pp
+        self.curr_pp += 1
+        return final_pp
+    
+    @clean_check_sanity_checks
     def clean_move(self, move):
-        return self.clean_value(move, self.is_move_valid, 0x21)
+        final_move = self.clean_value(move, self.is_move_valid, 0x21)
+        self.moves[self.curr_move] = final_move
+        self.curr_move += 1
+        return final_move
     
     @clean_check_sanity_checks
     def clean_species(self, species):
@@ -428,6 +449,9 @@ class GSCChecks:
         self.curr_stat_id = 0
         self.iv = [0,0,0,0]
         self.stat_exp = [0,0,0,0,0]
+        self.moves = [0,0,0,0]
+        self.curr_move = 0
+        self.curr_pp = 0
         self.curr_hp = 0
         self.curr_pos = 0
         self.curr_iv_pos = 0
