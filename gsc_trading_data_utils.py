@@ -153,7 +153,10 @@ class GSCUtils:
     def get_evolution(species, item):
         if not GSCUtils.is_evolving(species, item):
             return None
-        return GSCUtils.evolution_ids[2]
+        return GSCUtils.evolution_ids[species][2]
+    
+    def get_evolution_item(species):
+        return GSCUtils.evolution_ids[species][1]
     
 class GSCTradingText:
     def __init__(self, data, start, length=0xB, data_start=0):
@@ -212,16 +215,31 @@ class GSCTradingPokémonInfo:
     
     def get_species(self):
         return self.values[0]
+    
+    def set_species(self, data):
+        self.values[0] = data & 0xFF
         
     def get_item(self):
         return self.values[1]
+        
+    def set_item(self, data=0):
+        self.values[1] = data & 0xFF
     
     def get_move(self, pos):
         return self.values[2 + (pos-1)]
     
     def get_level(self):
         return self.values[0x1F]
-
+    
+    def update_stats(self):
+        old_max_hps = self.get_max_hp()
+        old_current_hps = self.get_curr_hp()
+        for i in range(6):
+            GSCUtils.write_short(self.values, 0x24 + (i * 2), stat_calculation(i, self.get_species(), self.get_ivs(), self.get_stat_exp(), self.get_level()))
+        new_max_hps = self.get_max_hp()
+        old_current_hps += new_max_hps-old_max_hps
+        GSCUtils.write_short(self.values, 0x22, math.min(old_current_hps, new_max_hps))
+        
     def get_stat_exp(self):
         ret = [0,0,0,0,0]
         for i in range(5):
@@ -290,11 +308,15 @@ class GSCTradingData:
         return mail_owned
         
     @check_pos_validity
-    def evolve_mon(self, pos=self.party_info.get_total()-1):
+    def evolve_mon(self, pos):
         evolution = GSCUtils.get_evolution(self.pokemon[pos].get_species(), self.pokemon[pos].get_item())
         if evolution is None:
             return None
-        
+        evo_item = GSCUtils.get_evolution_item(self.pokemon[pos].get_species())
+        if evo_item is not None:
+            self.pokemon[pos].set_item()
+        self.pokemon[pos].set_species(evolution)
+        self.pokemon[pos].update_stats()
         return True
     
     def trade_mon(self, other, own_index, other_index):
