@@ -1,5 +1,37 @@
 import math
 class GSCUtils:
+    evolution_ids_path = "useful_data/evolution_ids.bin"
+    mail_ids_path = "useful_data/ids_mail.bin"
+    no_mail_path = "useful_data/no_mail_section.bin"
+    base_stats_path = "useful_data/stats_gsc.bin"
+    text_conv_path = "useful_data/text_conv.txt"
+    pokemon_names_gs_path = "useful_data/pokemon_names_gs.txt"
+    everstone_id = 0x70
+    end_of_line = 0x50
+    name_size = 0xB
+    hp_stat_id = 0
+    stat_id_base_conv_table = [0,1,2,5,3,4]
+    stat_id_iv_conv_table = [0,0,1,2,3,3]
+    stat_id_exp_conv_table = [0,1,2,3,4,4]
+    
+    evolution_ids = None
+    mail_ids = None
+    base_stats = None
+    pokemon_names_gs = None
+    no_mail_section = None
+    
+    def __init__(self):
+        if GSCUtils.evolution_ids is None:
+            GSCUtils.evolution_ids = GSCUtils.prepare_evolution_check_list(GSCUtils.read_data(GSCUtils.evolution_ids_path))
+        if GSCUtils.mail_ids is None:
+            GSCUtils.mail_ids = GSCUtils.prepare_check_list(GSCUtils.read_data(GSCUtils.mail_ids_path))
+        if GSCUtils.no_mail_section is None:
+            GSCUtils.no_mail_section = GSCUtils.read_data(GSCUtils.no_mail_path)
+        if GSCUtils.base_stats is None:
+            GSCUtils.base_stats = GSCUtils.prepare_stats(GSCUtils.read_data(GSCUtils.base_stats_path))
+        if GSCUtils.pokemon_names_gs is None:
+            GSCUtils.pokemon_names_gs = GSCUtils.text_to_bytes(GSCUtils.pokemon_names_gs_path, GSCUtils.text_conv_path)
+    
     def read_data(target):
         data = None
         try:
@@ -9,6 +41,9 @@ class GSCUtils:
         except FileNotFoundError as e:
             pass
         return data
+    
+    def read_nybbles(val):
+        return [(val&0xF0) >> 4, val & 0xF]
     
     def read_short(data, pos):
         return ((data[pos] << 8) + (data[pos+1]))
@@ -35,10 +70,107 @@ class GSCUtils:
             return []
         return lines
     
+    def final_stat_calc_step(stat_id, level):
+        if stat_id != GSCUtils.hp_stat_id:
+            return 5
+        return level + 10
+    
+    def get_iv(iv, stat_id):
+        if stat_id != GSCUtils.hp_stat_id:
+            return iv[GSCUtils.stat_id_iv_conv_table[stat_id]]
+        return ((iv[0]&1)<<3) | ((iv[1]&1)<<2) | ((iv[2]&1)<<1) | (iv[3]&1)
+    
+    def get_exp(stat_exp, stat_id):
+        return stat_exp[GSCUtils.stat_id_exp_conv_table[stat_id]]
+    
+    def get_base_stat(species, stat_id):
+        return GSCUtils.base_stats[species][GSCUtils.stat_id_base_conv_table[stat_id]]
+    
+    def stat_calculation(stat_id, species, ivs, stat_exp, level, do_exp=True):
+        inter_value = (GSCUtils.get_base_stat(species, stat_id) + GSCUtils.get_iv(ivs, stat_id)) * 2
+        if do_exp:
+            inter_value += math.floor(math.ceil(math.sqrt(GSCUtils.get_exp(stat_exp, stat_id))/4))
+        inter_value = math.floor((inter_value*level)/100)
+        return inter_value + GSCUtils.final_stat_calc_step(stat_id, level)
+
+    def text_to_bytes(target, text_conv_target):
+        names = GSCUtils.read_text_file(target)
+        text_conv_dict = GSCUtils.prepare_dict(text_conv_target)
+        text_conv_dict['\n'] = GSCUtils.end_of_line
+        byte_names = []
+        for i in range(0x100):
+            byte_names += [[GSCUtils.end_of_line]*GSCUtils.name_size]
+            for j in range(len(names[i])):
+                letter = names[i][j].upper()
+                if letter in text_conv_dict:
+                    byte_names[i][j] = text_conv_dict[letter]
+                else:
+                    print("UNRECOGNIZED CHARACTER: " + letter)
+        return byte_names
+
+    def prepare_check_list(data):
+        ret = [False] * 0x100
+        if data is not None:
+            for i in data:
+                ret[i] = True
+        return ret
+    
+    def prepare_evolution_check_list(data):
+        ret = [(False, None, None)] * 0x100
+        
+        if data is not None:
+            data_len = int(len(data)/3)
+            for i in range(data_len):
+                ret[data[i]] = (True, None, data[i + (2*data_len)])
+                if data[i + data_len] != 0:
+                    ret[data[i]] = (True, data[i + data_len], data[i + (2*data_len)])
+        return ret
+        
+    def check_normal_list(checking_list, value):
+        if value >= 0x100 or value < 0:
+            return False
+        return checking_list[value]
+
+    def prepare_stats(data):
+        ret = [0] * 0x100
+        for i in range(0x100):
+            ret[i] = data[(i)*6:(i+1)*6]
+        return ret
+    
+    def is_item_mail(item):
+        return GSCUtils.check_normal_list(GSCUtils.mail_ids, item)
+    
+    def is_evolving(species, item):
+        if species >= 0x100 or species < 0:
+            return False
+        evo_info = GSCUtils.evolution_ids[species]
+        if evo_info[0]:
+            if item != GSCUtils.everstone_id:
+                if (evo_info[1] is None) or (item == evo_info[1]):
+                    return True
+        return False
+    
+    def get_evolution(species, item):
+        if not GSCUtils.is_evolving(species, item):
+            return None
+        return GSCUtils.evolution_ids[2]
+    
 class GSCTradingText:
     def __init__(self, data, start, length=0xB, data_start=0):
         self.values = data[start:start+length]
         self.start_at = data_start
+    
+    def values_equal(self, other):
+        for i in range(len(self.values)):
+            if self.values[i] == GSCUtils.end_of_line and (i >= len(other) or other[i] == GSCUtils.end_of_line):
+                return True
+            if i >= len(other):
+                return False
+            if self.values[i] != other[i]:
+                return False
+        if len(other) == len(self.values) or other[len(self.values)] == GSCUtils.end_of_line:
+            return True
+        return False
     
 class GSCTradingPartyInfo:
     gsc_max_party_mons = 6
@@ -75,6 +207,9 @@ class GSCTradingPokémonInfo:
     def add_mail_sender(self, data, start):
         self.mail_sender = GSCTradingText(data, start, length=0xE, data_start=4)
     
+    def is_nicknamed(self, default_name):
+        return not self.nickname.values_equal(default_name)
+    
     def get_species(self):
         return self.values[0]
         
@@ -86,7 +221,20 @@ class GSCTradingPokémonInfo:
     
     def get_level(self):
         return self.values[0x1F]
-    
+
+    def get_stat_exp(self):
+        ret = [0,0,0,0,0]
+        for i in range(5):
+            ret[i] = [GSCUtils.read_short(self.values, 0xB + (i * 2))]
+        return ret
+
+    def get_ivs(self):
+        ret = [0,0,0,0]
+        calc_val = [GSCUtils.read_nybbles(self.values[0x15]), GSCUtils.read_nybbles(self.values[0x16])]
+        for i in range(4):
+            ret[i] = calc_val[i/2][i&1]
+        return ret
+
     def get_curr_hp(self):
         return GSCUtils.read_short(self.values, 0x22)
     
@@ -108,8 +256,7 @@ class GSCTradingData:
     gsc_trading_mail_length = 0x21
     gsc_trading_mail_sender_length = 0xE
     
-    def __init__(self, checks, data_pokemon, data_mail=None):
-        self.checks = checks
+    def __init__(self, data_pokemon, data_mail=None):
         self.trader = GSCTradingText(data_pokemon, self.gsc_trader_name_pos)
         self.party_info = GSCTradingPartyInfo(data_pokemon, self.gsc_trading_party_info_pos)
         self.trader_info = GSCUtils.read_short(data_pokemon, self.gsc_trader_info_pos)
@@ -134,7 +281,7 @@ class GSCTradingData:
 
     @check_pos_validity
     def mon_has_mail(self, pos):
-        return self.checks.is_item_mail(self.pokemon[pos].get_item())
+        return GSCUtils.is_item_mail(self.pokemon[pos].get_item())
 
     def party_has_mail(self):
         mail_owned = False
@@ -142,8 +289,13 @@ class GSCTradingData:
             mail_owned |= self.mon_has_mail(i)
         return mail_owned
         
-    def mon_evolves(self):
-        return self.checks.is_evolving(self.pokemon[self.party_info.get_total()-1].get_species(), self.pokemon[self.party_info.get_total()-1].get_item())
+    @check_pos_validity
+    def evolve_mon(self, pos=self.party_info.get_total()-1):
+        evolution = GSCUtils.get_evolution(self.pokemon[pos].get_species(), self.pokemon[pos].get_item())
+        if evolution is None:
+            return None
+        
+        return True
     
     def trade_mon(self, other, own_index, other_index):
         self.reorder_party(own_index)
@@ -168,7 +320,7 @@ class GSCTradingData:
         data = []
         for i in range(2):
             data += [lengths[i]*[0]]
-        data += [self.checks.no_mail_section[:len(self.checks.no_mail_section)]]
+        data += [GSCUtils.no_mail_section[:len(GSCUtils.no_mail_section)]]
         GSCUtils.copy_to_data(data[1], self.gsc_trader_name_pos, self.trader.values)
         data[1][self.gsc_trading_party_info_pos] = self.party_info.get_total()
         GSCUtils.copy_to_data(data[1], self.gsc_trading_party_info_pos + 1, self.party_info.actual_mons)
@@ -188,35 +340,16 @@ class GSCChecks:
     bad_ids_moves_path = "useful_data/bad_ids_moves.bin"
     bad_ids_pokemon_path = "useful_data/bad_ids_pokemon.bin"
     bad_ids_text_path = "useful_data/bad_ids_text.bin"
-    evolution_ids_path = "useful_data/evolution_ids.bin"
-    mail_ids_path = "useful_data/ids_mail.bin"
     checks_map_path = "useful_data/checks_map.bin"
-    no_mail_path = "useful_data/no_mail_section.bin"
-    base_stats_path = "useful_data/stats_gsc.bin"
-    text_conv_path = "useful_data/text_conv.txt"
-    pokemon_names_gs_path = "useful_data/pokemon_names_gs.txt"
-    end_of_line = 0x50
-    name_size = 0xB
-    everstone_id = 0x70
-    hp_stat_id = 0
-    stat_id_base_conv_table = [0,1,2,5,3,4]
-    stat_id_iv_conv_table = [0,0,1,2,3,3]
-    stat_id_exp_conv_table = [0,1,2,3,4,4]
-    spdef_stat_id = 5
     
     def __init__(self, section_sizes):
         self.do_sanity_checks = True
-        self.bad_ids_items = self.prepare_check_list(GSCUtils.read_data(self.bad_ids_items_path))
-        self.bad_ids_moves = self.prepare_check_list(GSCUtils.read_data(self.bad_ids_moves_path))
-        self.bad_ids_pokemon = self.prepare_check_list(GSCUtils.read_data(self.bad_ids_pokemon_path))
-        self.bad_ids_text = self.prepare_check_list(GSCUtils.read_data(self.bad_ids_text_path))
-        self.mail_ids = self.prepare_check_list(GSCUtils.read_data(self.mail_ids_path))
-        self.evolution_ids = self.prepare_evolution_check_list(GSCUtils.read_data(self.evolution_ids_path))
+        self.bad_ids_items = GSCUtils.prepare_check_list(GSCUtils.read_data(self.bad_ids_items_path))
+        self.bad_ids_moves = GSCUtils.prepare_check_list(GSCUtils.read_data(self.bad_ids_moves_path))
+        self.bad_ids_pokemon = GSCUtils.prepare_check_list(GSCUtils.read_data(self.bad_ids_pokemon_path))
+        self.bad_ids_text = GSCUtils.prepare_check_list(GSCUtils.read_data(self.bad_ids_text_path))
         self.check_functions = [self.clean_nothing, self.clean_text, self.clean_team_size, self.clean_species, self.clean_move, self.clean_item, self.clean_level, self.check_hp, self.clean_text_final, self.load_stat_exp, self.load_stat_iv, self.check_stat, self.clean_species_sp]
         self.checks_map = self.prepare_checks_map(GSCUtils.read_data(self.checks_map_path), section_sizes)
-        self.no_mail_section = GSCUtils.read_data(self.no_mail_path)
-        self.base_stats = self.prepare_stats(GSCUtils.read_data(self.base_stats_path))
-        self.pokemon_names_gs = self.text_to_bytes(self.pokemon_names_gs_path, self.text_conv_path)
     
     def clean_check_sanity_checks(func):
         def wrapper(*args, **kwargs):
@@ -227,27 +360,6 @@ class GSCChecks:
             else:
                 return val
         return wrapper
-
-    def text_to_bytes(self, target, text_conv_target):
-        names = GSCUtils.read_text_file(target)
-        text_conv_dict = GSCUtils.prepare_dict(text_conv_target)
-        text_conv_dict['\n'] = self.end_of_line
-        byte_names = []
-        for i in range(0x100):
-            byte_names += [[self.end_of_line]*self.name_size]
-            for j in range(len(names[i])):
-                letter = names[i][j].upper()
-                if letter in text_conv_dict:
-                    byte_names[i][j] = text_conv_dict[letter]
-                else:
-                    print("UNRECOGNIZED CHARACTER: " + letter)
-        return byte_names
-
-    def prepare_stats(self, data):
-        ret = [0] * 0x100
-        for i in range(0x100):
-            ret[i] = data[(i)*6:(i+1)*6]
-        return ret
     
     def set_sanity_checks(self, new_val):
         self.do_sanity_checks = new_val
@@ -258,13 +370,6 @@ class GSCChecks:
     def prepare_species_buffer(self):
         self.curr_species_pos = 0
 
-    def prepare_check_list(self, data):
-        ret = [False] * 0x100
-        if data is not None:
-            for i in data:
-                ret[i] = True
-        return ret
-
     def prepare_checks_map(self, data, lengths):
         raw_data_sections = [data[0:lengths[0]], data[lengths[0]:lengths[0]+lengths[1]], data[lengths[0]+lengths[1]:lengths[0]+lengths[1]+lengths[2]]]
         call_map = [[],[],[]]
@@ -272,22 +377,6 @@ class GSCChecks:
             for j in range(lengths[i]):
                 call_map[i] += [self.check_functions[raw_data_sections[i][j]]]
         return call_map
-    
-    def prepare_evolution_check_list(self, data):
-        ret = [(False, None)] * 0x100
-        
-        if data is not None:
-            data_len = int(len(data)/2)
-            for i in range(data_len):
-                ret[data[i]] = (True, None)
-                if data[i + data_len] != 0:
-                    ret[data[i]] = (True, data[i + data_len])
-        return ret
-        
-    def check_normal_list(self, checking_list, value):
-        if value >= 0x100 or value < 0:
-            return False
-        return checking_list[value]
     
     @clean_check_sanity_checks
     def clean_nothing(self, val):
@@ -314,9 +403,10 @@ class GSCChecks:
     @clean_check_sanity_checks
     def clean_species(self, species):
         self.curr_species = self.clean_value(species, self.is_species_valid, 0x13)
-        self.curr_stat_id = 1
+        self.curr_stat_id = 0
         self.iv = [0,0,0,0]
         self.stat_exp = [0,0,0,0,0]
+        self.curr_hp = 0
         self.curr_pos = 0
         self.curr_iv_pos = 0
         self.curr_exp_id = 0
@@ -346,7 +436,7 @@ class GSCChecks:
     
     @clean_check_sanity_checks
     def load_stat_iv(self, val):
-        calc_val = [(val&0xF0) >> 4, val & 0xF]
+        calc_val = GSCUtils.read_nybbles(val)
         self.iv[self.curr_iv_pos*2] = calc_val[0]
         self.iv[(self.curr_iv_pos*2) + 1] = calc_val[1]
         self.curr_iv_pos += 1
@@ -366,30 +456,7 @@ class GSCChecks:
         # Possibility to put bad words filters here
         self.prepare_text_buffer()
         return char_val
-    
-    def final_stat_calc_step(self, stat_id):
-        if stat_id != self.hp_stat_id:
-            return 5
-        return self.level + 10
-    
-    def get_iv(self, stat_id):
-        if stat_id != self.hp_stat_id:
-            return self.iv[self.stat_id_iv_conv_table[stat_id]]
-        return ((self.iv[0]&1)<<3) | ((self.iv[1]&1)<<2) | ((self.iv[2]&1)<<1) | (self.iv[3]&1)
-    
-    def get_exp(self, stat_id):
-        return self.stat_exp[self.stat_id_exp_conv_table[stat_id]]
-    
-    def get_base_stat(self, stat_id):
-        return self.base_stats[self.curr_species][self.stat_id_base_conv_table[stat_id]]
-    
-    def stat_calculation(self, stat_id, do_exp=True):
-        inter_value = (self.get_base_stat(stat_id) + self.get_iv(stat_id)) * 2
-        if do_exp:
-            inter_value += math.floor(math.ceil(math.sqrt(self.get_exp(stat_id))/4))
-        inter_value = math.floor((inter_value*self.level)/100)
-        return inter_value + self.final_stat_calc_step(stat_id)
-    
+
     def check_stat_range(self, stat_range, curr_stat, pos):
         if curr_stat > stat_range[1]:
             curr_stat = stat_range[1]
@@ -401,7 +468,7 @@ class GSCChecks:
     def check_stat(self, val):
         if self.curr_pos == 0:
             self.stat = 0
-            self.stat_range = [self.stat_calculation(self.curr_stat_id, do_exp=False), self.stat_calculation(self.curr_stat_id)]
+            self.stat_range = [GSCUtils.stat_calculation(self.curr_stat_id, self.curr_species, self.iv, self.stat_exp, self.level, do_exp=False), GSCUtils.stat_calculation(self.curr_stat_id, self.curr_species, self.iv, self.stat_exp, self.level)]
         curr_read_val = val << (8 * (1 - (self.curr_pos & 1)))
         self.stat = self.check_stat_range(self.stat_range, (self.stat & 0xFF00) | curr_read_val, self.curr_pos)
         val = (self.stat >> (8 * (1 - (self.curr_pos & 1)))) & 0xFF
@@ -413,18 +480,17 @@ class GSCChecks:
     
     @clean_check_sanity_checks
     def check_hp(self, val):
+        val = self.check_stat(val)
         if self.curr_pos == 0:
-            self.hps = [0,0]
-            self.hps_range = [self.stat_calculation(self.hp_stat_id, do_exp=False), self.stat_calculation(self.hp_stat_id)]
-        curr_read_val = val << (8 * (1 - (self.curr_pos & 1)))
-        self.hps[self.curr_pos >> 1] = self.check_stat_range(self.hps_range, (self.hps[self.curr_pos >> 1] & 0xFF00) | curr_read_val, self.curr_pos)
-        val = (self.hps[self.curr_pos >> 1] >> (8 * (1 - (self.curr_pos & 1)))) & 0xFF
-        self.curr_pos += 1
-        if self.curr_pos >= 4:
-            if self.hps[1] < self.hps[0]:
-                # Possibility to put a warning for bad stats here
-                pass
-            self.curr_pos = 0
+            if self.curr_hp == 0:
+                self.hps = [0,0]
+                self.curr_stat_id -= 1
+            self.hps[self.curr_hp] = self.stat
+            self.curr_hp += 1
+            if self.curr_hp == 2:
+                if self.hps[0] > self.hps[1]:
+                    #Can put a warning for bad data
+                    pass
         return val
     
     def clean_value(self, value, checker, default_value):
@@ -445,32 +511,19 @@ class GSCChecks:
     def is_item_valid(self, item):
         if not self.do_sanity_checks:
             return True
-        return not self.check_normal_list(self.bad_ids_items, item)
+        return not GSCUtils.check_normal_list(self.bad_ids_items, item)
     
     def is_move_valid(self, move):
         if not self.do_sanity_checks:
             return True
-        return not self.check_normal_list(self.bad_ids_moves, move)
+        return not GSCUtils.check_normal_list(self.bad_ids_moves, move)
     
     def is_species_valid(self, species):
         if not self.do_sanity_checks:
             return True
-        return not self.check_normal_list(self.bad_ids_pokemon, species)
+        return not GSCUtils.check_normal_list(self.bad_ids_pokemon, species)
     
     def is_char_valid(self, char):
         if not self.do_sanity_checks:
             return True
-        return not self.check_normal_list(self.bad_ids_text, char)
-    
-    def is_item_mail(self, item):
-        return self.check_normal_list(self.mail_ids, item)
-    
-    def is_evolving(self, species, item):
-        if species >= 0x100 or species < 0:
-            return False
-        evo_info = self.evolution_ids[species]
-        if evo_info[0]:
-            if item != self.everstone_id:
-                if (evo_info[1] is None) or (item == evo_info[1]):
-                    return True
-        return False
+        return not GSCUtils.check_normal_list(self.bad_ids_text, char)

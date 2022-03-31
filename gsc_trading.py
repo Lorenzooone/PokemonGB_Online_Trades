@@ -24,6 +24,7 @@ class GSCTrading:
         self.fileOtherTargetName = target_other
         self.fileSelfTargetName = target_self
         self.checks = GSCChecks(self.gsc_special_sections_len)
+        GSCUtils()
 
     def send_predefined_section(self, states_list, stop_before_last):
         sending = 0
@@ -127,7 +128,7 @@ class GSCTrading:
     
     def get_mail_data_only(self):
         print("IMPLEMENT get_mail_data_only !!!")
-        return self.checks.no_mail_section
+        return GSCUtils.no_mail_section
         
     def send_mail_data_only(self, data):
         print("IMPLEMENT send_mail_data_only !!!")
@@ -249,15 +250,15 @@ class GSCTrading:
         pokemon_data, pokemon_data_other = self.read_section(1, send_data[1], buffered)
         
         # Trade mail data only if needed
-        pokemon_own = GSCTradingData(self.checks, pokemon_data)
-        pokemon_other = GSCTradingData(self.checks, pokemon_data_other)
+        pokemon_own = GSCTradingData(pokemon_data)
+        pokemon_other = GSCTradingData(pokemon_data_other)
         pokemon_own_mail = pokemon_own.party_has_mail()
         pokemon_other_mail = pokemon_other.party_has_mail()
         
         if not pokemon_own_mail and not pokemon_other_mail:
-            mail_data, mail_data_other = self.read_section(2, self.checks.no_mail_section, True)
+            mail_data, mail_data_other = self.read_section(2, GSCUtils.no_mail_section, True)
         elif pokemon_own_mail and not pokemon_other_mail:
-            mail_data, mail_data_other = self.read_section(2, self.checks.no_mail_section, True)
+            mail_data, mail_data_other = self.read_section(2, GSCUtils.no_mail_section, True)
             if not buffered:
                 self.send_mail_data_only(mail_data)
         elif not pokemon_own_mail and pokemon_other_mail:
@@ -301,16 +302,16 @@ class GSCTrading:
     
     def synchronous_trade(self):
         data, data_other = self.trade_starting_sequence(False)
-        self.own_pokemon = GSCTradingData(self.checks, data[1], data_mail=data[2])
-        self.other_pokemon = GSCTradingData(self.checks, data_other[1], data_mail=data_other[2])
+        self.own_pokemon = GSCTradingData(data[1], data_mail=data[2])
+        self.other_pokemon = GSCTradingData(data_other[1], data_mail=data_other[2])
         return True
     
     def buffered_trade(self):
         data, valid = self.get_trading_data(self.gsc_special_sections_len)
         data, data_other = self.trade_starting_sequence(True, send_data=data)
         self.send_trading_data(data)
-        self.own_pokemon = GSCTradingData(self.checks, data[1], data_mail=data[2])
-        self.other_pokemon = GSCTradingData(self.checks, data_other[1], data_mail=data_other[2])
+        self.own_pokemon = GSCTradingData(data[1], data_mail=data[2])
+        self.other_pokemon = GSCTradingData(data_other[1], data_mail=data_other[2])
         return valid
 
     def trade(self, buffered = True):
@@ -326,7 +327,7 @@ class GSCTrading:
                     valid = self.synchronous_trade()
             elif self.own_blank_trade:
                 data, data_other = self.trade_starting_sequence(True, send_data=self.other_pokemon.create_trading_data(GSCTrading.gsc_special_sections_len))
-                self.own_pokemon = GSCTradingData(self.checks, data[1], data_mail=data[2])
+                self.own_pokemon = GSCTradingData(data[1], data_mail=data[2])
                 self.send_trading_data(data)
             elif self.other_blank_trade:
                 valid = False
@@ -334,7 +335,7 @@ class GSCTrading:
                     self.sleep_func()
                     data, valid = self.get_trading_data(self.gsc_special_sections_len)
                 data, data_other = self.trade_starting_sequence(True, send_data=data)
-                self.other_pokemon = GSCTradingData(self.checks, data_other[1], data_mail=data_other[2])
+                self.other_pokemon = GSCTradingData(data_other[1], data_mail=data_other[2])
             else:
                 data, data_other = self.trade_starting_sequence(True, send_data=self.other_pokemon.create_trading_data(GSCTrading.gsc_special_sections_len))
             self.own_blank_trade = True
