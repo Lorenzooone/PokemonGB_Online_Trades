@@ -7,6 +7,7 @@ class GSCUtils:
     text_conv_path = "useful_data/text_conv.txt"
     pokemon_names_gs_path = "useful_data/pokemon_names_gs.txt"
     moves_pp_list_path = "useful_data/moves_pp_list.bin"
+    learnset_evos_path = "useful_data/learnset_evos.bin"
     everstone_id = 0x70
     end_of_line = 0x50
     name_size = 0xB
@@ -21,6 +22,7 @@ class GSCUtils:
     pokemon_names_gs = None
     no_mail_section = None
     moves_pp_list = None
+    learnsets = None
     
     def __init__(self):
         if GSCUtils.evolution_ids is None:
@@ -35,6 +37,8 @@ class GSCUtils:
             GSCUtils.pokemon_names_gs = GSCUtils.text_to_bytes(GSCUtils.pokemon_names_gs_path, GSCUtils.text_conv_path)
         if GSCUtils.moves_pp_list is None:
             GSCUtils.moves_pp_list = GSCUtils.read_data(GSCUtils.moves_pp_list_path)
+        if GSCUtils.learnsets is None:
+            GSCUtils.learnsets = GSCUtils.prepare_learnsets(GSCUtils.read_data(GSCUtils.learnset_evos_path))
     
     def read_data(target):
         data = None
@@ -73,6 +77,27 @@ class GSCUtils:
         except FileNotFoundError as e:
             return []
         return lines
+    
+    def prepare_learnsets(data):
+        dict = {}
+        entries = data[0]
+        for i in range(entries):
+            pos = GSCUtils.read_short(data, 1 + (i * 2))
+            entry = {}
+            species = data[pos]
+            levels = data[pos+1]
+            pos += 2
+            for j in range(levels):
+                level = data[pos]
+                num_moves = data[pos+1]
+                moves_list = []
+                pos += 2
+                for k in range(num_moves):
+                    moves_list += [data[pos]]
+                    pos += 1
+                entry[level] = moves_list
+            dict[species] = entry
+        return dict
     
     def final_stat_calc_step(stat_id, level):
         if stat_id != GSCUtils.hp_stat_id:
@@ -220,6 +245,12 @@ class GSCTradingPokémonInfo:
     def get_species(self):
         return self.values[0]
     
+    def learnable_moves(self):
+        if self.get_species() in GSCUtils.learnsets.keys():
+            if self.get_level() in GSCUtils.learnsets[self.get_species()].keys():
+                return GSCUtils.learnsets[self.get_species()][self.get_level()]
+        return None
+    
     def set_species(self, data):
         self.values[0] = data & 0xFF
         
@@ -229,8 +260,28 @@ class GSCTradingPokémonInfo:
     def set_item(self, data=0):
         self.values[1] = data & 0xFF
     
+    def has_move(self, move):
+        for i in range(4):
+            if self.get_move(i) == move:
+                return True
+        return False
+    
+    def free_move_slots(self):
+        free_slots = []
+        for i in range(4):
+            if self.get_move(i) == GSCChecks.free_value_moves:
+                free_slots += [i]
+        return free_slots
+    
     def get_move(self, pos):
-        return self.values[2 + (pos-1)]
+        return self.values[2 + pos]
+    
+    def set_move(self, pos, val):
+        self.values[2 + pos] = val
+        self.set_pp(pos, GSCUtils.moves_pp_list[val])
+    
+    def set_pp(self, pos, val):
+        self.values[0x17 + pos] = val
     
     def get_level(self):
         return self.values[0x1F]
@@ -321,7 +372,16 @@ class GSCTradingData:
             self.pokemon[pos].set_item()
         self.pokemon[pos].set_species(evolution)
         self.pokemon[pos].update_stats()
-        return True
+        curr_learning = self.pokemon[pos].learnable_moves()
+        if curr_learning is not None:
+            for i in range(len(curr_learning)):
+                if not self.pokemon[pos].has_move(curr_learning[i]):
+                    free_slots = self.pokemon[pos].free_move_slots()
+                    if len(free_slots) > 0:
+                        self.pokemon[pos].set_move(free_slots[0], curr_learning[i])
+                    else:
+                        return True
+        return False
     
     def trade_mon(self, other, own_index, other_index):
         self.reorder_party(own_index)
@@ -367,6 +427,8 @@ class GSCChecks:
     bad_ids_pokemon_path = "useful_data/bad_ids_pokemon.bin"
     bad_ids_text_path = "useful_data/bad_ids_text.bin"
     checks_map_path = "useful_data/checks_map.bin"
+    free_value_species = 0xFF
+    free_value_moves = 0xFF
     
     def __init__(self, section_sizes):
         self.do_sanity_checks = True
@@ -438,6 +500,9 @@ class GSCChecks:
     
     @clean_check_sanity_checks
     def clean_move(self, move):
+        if move == GSCChecks.free_value_moves and self.curr_move > 0:
+            self.curr_move += 1
+            return move
         final_move = self.clean_value(move, self.is_move_valid, 0x21)
         self.moves[self.curr_move] = final_move
         self.curr_move += 1
@@ -461,7 +526,7 @@ class GSCChecks:
     
     @clean_check_sanity_checks
     def clean_species_sp(self, species):
-        if species == 0xFF and self.curr_species_pos >= self.team_size:
+        if species == GSCChecks.free_value_species and self.curr_species_pos >= self.team_size:
             self.curr_species_pos += 1
             return species
         found_species = self.clean_value(species, self.is_species_valid, 0x13)
