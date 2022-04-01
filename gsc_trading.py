@@ -232,8 +232,12 @@ class GSCTrading:
                     evo_other = self.other_pokemon.evolve_mon(self.other_pokemon.party_info.get_total()-1)
                     if evo_own is not None:
                         self.own_blank_trade = evo_own
+                    else:
+                        self.own_blank_trade = False
                     if evo_other is not None:
                         self.other_blank_trade = evo_other
+                    else:
+                        self.other_blank_trade = False
                     
                     # Conclude the trade successfully
                     next = self.wait_for_input(next)

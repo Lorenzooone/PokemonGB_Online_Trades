@@ -290,22 +290,22 @@ class GSCTradingPokémonInfo:
         old_max_hps = self.get_max_hp()
         old_current_hps = self.get_curr_hp()
         for i in range(6):
-            GSCUtils.write_short(self.values, 0x24 + (i * 2), stat_calculation(i, self.get_species(), self.get_ivs(), self.get_stat_exp(), self.get_level()))
+            GSCUtils.write_short(self.values, 0x24 + (i * 2), GSCUtils.stat_calculation(i, self.get_species(), self.get_ivs(), self.get_stat_exp(), self.get_level()))
         new_max_hps = self.get_max_hp()
         old_current_hps += new_max_hps-old_max_hps
-        GSCUtils.write_short(self.values, 0x22, math.min(old_current_hps, new_max_hps))
+        GSCUtils.write_short(self.values, 0x22, min(old_current_hps, new_max_hps))
         
     def get_stat_exp(self):
         ret = [0,0,0,0,0]
         for i in range(5):
-            ret[i] = [GSCUtils.read_short(self.values, 0xB + (i * 2))]
+            ret[i] = GSCUtils.read_short(self.values, 0xB + (i * 2))
         return ret
 
     def get_ivs(self):
         ret = [0,0,0,0]
         calc_val = [GSCUtils.read_nybbles(self.values[0x15]), GSCUtils.read_nybbles(self.values[0x16])]
         for i in range(4):
-            ret[i] = calc_val[i/2][i&1]
+            ret[i] = calc_val[i>>1][i&1]
         return ret
 
     def get_curr_hp(self):
@@ -373,6 +373,7 @@ class GSCTradingData:
         if not self.pokemon[pos].is_nicknamed():
             self.pokemon[pos].add_nickname(GSCUtils.pokemon_names_gs[evolution], 0)
         self.pokemon[pos].set_species(evolution)
+        self.party_info.actual_mons[pos] = self.pokemon[pos].get_species()
         self.pokemon[pos].update_stats()
         curr_learning = self.pokemon[pos].learnable_moves()
         if curr_learning is not None:
@@ -430,7 +431,7 @@ class GSCChecks:
     bad_ids_text_path = "useful_data/bad_ids_text.bin"
     checks_map_path = "useful_data/checks_map.bin"
     free_value_species = 0xFF
-    free_value_moves = 0xFF
+    free_value_moves = 0
     
     def __init__(self, section_sizes):
         self.do_sanity_checks = True
@@ -503,6 +504,7 @@ class GSCChecks:
     @clean_check_sanity_checks
     def clean_move(self, move):
         if move == GSCChecks.free_value_moves and self.curr_move > 0:
+            self.moves[self.curr_move] = GSCChecks.free_value_moves
             self.curr_move += 1
             return move
         final_move = self.clean_value(move, self.is_move_valid, 0x21)
