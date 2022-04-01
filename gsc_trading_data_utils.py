@@ -239,8 +239,8 @@ class GSCTradingPokémonInfo:
     def add_mail_sender(self, data, start):
         self.mail_sender = GSCTradingText(data, start, length=0xE, data_start=4)
     
-    def is_nicknamed(self, default_name):
-        return not self.nickname.values_equal(default_name)
+    def is_nicknamed(self):
+        return not self.nickname.values_equal(GSCUtils.pokemon_names_gs[self.get_species()])
     
     def get_species(self):
         return self.values[0]
@@ -370,6 +370,8 @@ class GSCTradingData:
         evo_item = GSCUtils.get_evolution_item(self.pokemon[pos].get_species())
         if evo_item is not None:
             self.pokemon[pos].set_item()
+        if not self.pokemon[pos].is_nicknamed():
+            self.pokemon[pos].add_nickname(GSCUtils.pokemon_names_gs[evolution], 0)
         self.pokemon[pos].set_species(evolution)
         self.pokemon[pos].update_stats()
         curr_learning = self.pokemon[pos].learnable_moves()
