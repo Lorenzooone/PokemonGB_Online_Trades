@@ -133,6 +133,20 @@ class GSCTrading:
     def send_mail_data_only(self, data):
         print("IMPLEMENT send_mail_data_only !!!")
         pass
+    
+    def get_move_data_only(self):
+        print("IMPLEMENT get_move_data_only !!!")
+        val = [0x21,0,0,0,0,0,0,0]
+        for i in range(4):
+            self.other_pokemon.pokemon[self.other_pokemon.get_last_mon_index()].set_move(i, val[i], max_pp=False)
+            self.other_pokemon.pokemon[self.other_pokemon.get_last_mon_index()].set_pp(i, val[4+i])
+        
+    def send_move_data_only(self):
+        print("IMPLEMENT send_move_data_only !!!")
+        val = [0,0,0,0,0,0,0,0]
+        for i in range(4):
+            val[i] = self.own_pokemon.pokemon[self.own_pokemon.get_last_mon_index()].get_move(i)
+            val[4+i] = self.own_pokemon.pokemon[self.own_pokemon.get_last_mon_index()].get_pp(i)
 
     def end_trade(self):
         next = 0
@@ -228,8 +242,8 @@ class GSCTrading:
                 if not self.is_choice_decline(received_accepted) and not self.is_choice_decline(accepted):
                     # Apply the trade to the data
                     self.own_pokemon.trade_mon(self.other_pokemon, self.convert_choice(sent_mon), self.convert_choice(received_choice))
-                    evo_own = self.own_pokemon.evolve_mon(self.own_pokemon.party_info.get_total()-1)
-                    evo_other = self.other_pokemon.evolve_mon(self.other_pokemon.party_info.get_total()-1)
+                    evo_own = self.own_pokemon.evolve_mon(self.own_pokemon.get_last_mon_index())
+                    evo_other = self.other_pokemon.evolve_mon(self.other_pokemon.get_last_mon_index())
                     if evo_own is not None:
                         self.own_blank_trade = evo_own
                     else:
@@ -333,19 +347,13 @@ class GSCTrading:
                     valid = self.buffered_trade()
                 else:
                     valid = self.synchronous_trade()
-            elif self.own_blank_trade:
-                data, data_other = self.trade_starting_sequence(True, send_data=self.other_pokemon.create_trading_data(GSCTrading.gsc_special_sections_len))
-                self.own_pokemon = GSCTradingData(data[1], data_mail=data[2])
-                self.send_trading_data(data)
-            elif self.other_blank_trade:
-                valid = False
-                while not valid:
-                    self.sleep_func()
-                    data, valid = self.get_trading_data(self.gsc_special_sections_len)
-                data, data_other = self.trade_starting_sequence(True, send_data=data)
-                self.other_pokemon = GSCTradingData(data_other[1], data_mail=data_other[2])
             else:
+                if self.other_blank_trade:
+                    self.get_move_data_only()
                 data, data_other = self.trade_starting_sequence(True, send_data=self.other_pokemon.create_trading_data(GSCTrading.gsc_special_sections_len))
+                if  self.own_blank_trade:
+                    self.own_pokemon = GSCTradingData(data[1], data_mail=data[2])
+                    self.send_move_data_only()
             self.own_blank_trade = True
             self.other_blank_trade = True
             self.do_trade(close=not valid)

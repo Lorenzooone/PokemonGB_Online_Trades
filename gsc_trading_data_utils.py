@@ -276,12 +276,16 @@ class GSCTradingPokémonInfo:
     def get_move(self, pos):
         return self.values[2 + pos]
     
-    def set_move(self, pos, val):
+    def set_move(self, pos, val, max_pp=True):
         self.values[2 + pos] = val
-        self.set_pp(pos, GSCUtils.moves_pp_list[val])
+        if max_pp:
+            self.set_pp(pos, GSCUtils.moves_pp_list[val])
     
     def set_pp(self, pos, val):
         self.values[0x17 + pos] = val
+    
+    def get_pp(self, pos):
+        return self.values[0x17 + pos]
     
     def get_level(self):
         return self.values[0x1F]
@@ -334,7 +338,7 @@ class GSCTradingData:
         self.party_info = GSCTradingPartyInfo(data_pokemon, self.gsc_trading_party_info_pos)
         self.trader_info = GSCUtils.read_short(data_pokemon, self.gsc_trader_info_pos)
         self.pokemon = []
-        for i in range(self.party_info.get_total()):
+        for i in range(self.get_party_size()):
             self.pokemon += [GSCTradingPokémonInfo(data_pokemon, self.gsc_trading_pokemon_pos + i * self.gsc_trading_pokemon_length)]
             self.pokemon[i].add_ot_name(data_pokemon, self.gsc_trading_pokemon_ot_pos + i * self.gsc_trading_name_length)
             self.pokemon[i].add_nickname(data_pokemon, self.gsc_trading_pokemon_nickname_pos + i * self.gsc_trading_name_length)
@@ -346,11 +350,17 @@ class GSCTradingData:
         def wrapper(*args, **kwargs):
             self = args[0]
             pos = args[1]
-            if pos < 0 or pos >= self.party_info.get_total():
+            if pos < 0 or pos >= self.get_party_size():
                 print("Index error!")
                 return False
             return func(*args, **kwargs)
         return wrapper
+    
+    def get_party_size(self):
+        return self.party_info.get_total()
+    
+    def get_last_mon_index(self):
+        return self.get_party_size()-1
 
     @check_pos_validity
     def mon_has_mail(self, pos):
@@ -358,7 +368,7 @@ class GSCTradingData:
 
     def party_has_mail(self):
         mail_owned = False
-        for i in range(self.party_info.get_total()):
+        for i in range(self.get_party_size()):
             mail_owned |= self.mon_has_mail(i)
         return mail_owned
         
@@ -389,21 +399,21 @@ class GSCTradingData:
     def trade_mon(self, other, own_index, other_index):
         self.reorder_party(own_index)
         other.reorder_party(other_index)
-        own = self.pokemon[self.party_info.get_total()-1]
-        self.pokemon[self.party_info.get_total()-1] = other.pokemon[other.party_info.get_total()-1]
-        other.pokemon[other.party_info.get_total()-1] = own
-        self.party_info.actual_mons[self.party_info.get_total()-1] = self.pokemon[self.party_info.get_total()-1].get_species()
-        other.party_info.actual_mons[other.party_info.get_total()-1] = other.pokemon[other.party_info.get_total()-1].get_species()
+        own = self.pokemon[self.get_last_mon_index()]
+        self.pokemon[self.get_last_mon_index()] = other.pokemon[other.get_last_mon_index()]
+        other.pokemon[other.get_last_mon_index()] = own
+        self.party_info.actual_mons[self.get_last_mon_index()] = self.pokemon[self.get_last_mon_index()].get_species()
+        other.party_info.actual_mons[other.get_last_mon_index()] = other.pokemon[other.get_last_mon_index()].get_species()
     
     @check_pos_validity
     def reorder_party(self, traded_pos):
         pa_info = self.party_info.actual_mons[traded_pos]
         po_data = self.pokemon[traded_pos]
-        for i in range(traded_pos+1,self.party_info.get_total()):
+        for i in range(traded_pos+1,self.get_party_size()):
             self.party_info.actual_mons[i-1] = self.party_info.actual_mons[i]
             self.pokemon[i-1] = self.pokemon[i]
-        self.party_info.actual_mons[self.party_info.get_total()-1] = pa_info
-        self.pokemon[self.party_info.get_total()-1] = po_data
+        self.party_info.actual_mons[self.get_last_mon_index()] = pa_info
+        self.pokemon[self.get_last_mon_index()] = po_data
 
     def create_trading_data(self, lengths):
         data = []
@@ -411,11 +421,11 @@ class GSCTradingData:
             data += [lengths[i]*[0]]
         data += [GSCUtils.no_mail_section[:len(GSCUtils.no_mail_section)]]
         GSCUtils.copy_to_data(data[1], self.gsc_trader_name_pos, self.trader.values)
-        data[1][self.gsc_trading_party_info_pos] = self.party_info.get_total()
+        data[1][self.gsc_trading_party_info_pos] = self.get_party_size()
         GSCUtils.copy_to_data(data[1], self.gsc_trading_party_info_pos + 1, self.party_info.actual_mons)
         data[1][0x12] = 0xFF
         GSCUtils.write_short(data[1], self.gsc_trader_info_pos, self.trader_info)
-        for i in range(self.party_info.get_total()):
+        for i in range(self.get_party_size()):
             GSCUtils.copy_to_data(data[1], self.gsc_trading_pokemon_pos + (i * self.gsc_trading_pokemon_length), self.pokemon[i].values)
             GSCUtils.copy_to_data(data[1], self.gsc_trading_pokemon_ot_pos + (i * self.gsc_trading_name_length), self.pokemon[i].ot_name.values)
             GSCUtils.copy_to_data(data[1], self.gsc_trading_pokemon_nickname_pos + (i * self.gsc_trading_name_length), self.pokemon[i].nickname.values)
