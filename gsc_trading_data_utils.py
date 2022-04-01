@@ -8,6 +8,8 @@ class GSCUtils:
     pokemon_names_gs_path = "useful_data/pokemon_names_gs.txt"
     moves_pp_list_path = "useful_data/moves_pp_list.bin"
     learnset_evos_path = "useful_data/learnset_evos.bin"
+    exp_groups_path = "useful_data/pokemon_exp_groups_gs.bin"
+    exp_lists_path = "useful_data/pokemon_exp_gs.txt"
     everstone_id = 0x70
     end_of_line = 0x50
     name_size = 0xB
@@ -15,6 +17,8 @@ class GSCUtils:
     stat_id_base_conv_table = [0,1,2,5,3,4]
     stat_id_iv_conv_table = [0,0,1,2,3,3]
     stat_id_exp_conv_table = [0,1,2,3,4,4]
+    min_level = 2
+    max_level = 100
     
     evolution_ids = None
     mail_ids = None
@@ -23,6 +27,8 @@ class GSCUtils:
     no_mail_section = None
     moves_pp_list = None
     learnsets = None
+    exp_groups = None
+    exp_lists = None
     
     def __init__(self):
         if GSCUtils.evolution_ids is None:
@@ -39,6 +45,10 @@ class GSCUtils:
             GSCUtils.moves_pp_list = GSCUtils.read_data(GSCUtils.moves_pp_list_path)
         if GSCUtils.learnsets is None:
             GSCUtils.learnsets = GSCUtils.prepare_learnsets(GSCUtils.read_data(GSCUtils.learnset_evos_path))
+        if GSCUtils.exp_groups is None:
+            GSCUtils.exp_groups = GSCUtils.read_data(GSCUtils.exp_groups_path)
+        if GSCUtils.exp_lists is None:
+            GSCUtils.exp_lists = GSCUtils.prepare_exp_lists(GSCUtils.read_text_file(GSCUtils.exp_lists_path))
     
     def read_data(target):
         data = None
@@ -69,6 +79,39 @@ class GSCUtils:
         for i in lines:
             dict[i.split()[0]] = int(i.split()[1])
         return dict
+    
+    def get_level_exp(species, exp):
+        start = GSCUtils.min_level
+        end = GSCUtils.max_level
+        if exp < GSCUtils.get_exp_level(species, start + 1):
+            return start
+        if exp >= GSCUtils.get_exp_level(species, end):
+            return end
+        end_search = False
+        while not end_search:
+            check_level = math.floor((start+end)/2)
+            level_exp = GSCUtils.get_exp_level(species, check_level)
+            next_level_exp = GSCUtils.get_exp_level(species, check_level + 1)
+            if exp < level_exp:
+                end = check_level
+            elif exp > next_level_exp:
+                start = check_level
+            elif exp == next_level_exp:
+                return check_level + 1
+            else:
+                return check_level
+        return GSCUtils.max_level
+    
+    def get_exp_level(species, level):
+        return GSCUtils.exp_lists[GSCUtils.exp_groups[species]][level-1]
+
+    def prepare_exp_lists(lines):
+        exp_lists = [[], [], [], [], [], []]
+        for i in range(GSCUtils.max_level):
+            columns = lines[i].split()
+            for j in range(6):
+                exp_lists[j] += [int(columns[j])]
+        return exp_lists
     
     def read_text_file(target):
         try:
@@ -440,6 +483,7 @@ class GSCChecks:
     bad_ids_pokemon_path = "useful_data/bad_ids_pokemon.bin"
     bad_ids_text_path = "useful_data/bad_ids_text.bin"
     checks_map_path = "useful_data/checks_map.bin"
+    curr_exp_pos_masks = [0, 0xFF0000, 0xFFFF00]
     free_value_species = 0xFF
     free_value_moves = 0
     
@@ -449,7 +493,7 @@ class GSCChecks:
         self.bad_ids_moves = GSCUtils.prepare_check_list(GSCUtils.read_data(self.bad_ids_moves_path))
         self.bad_ids_pokemon = GSCUtils.prepare_check_list(GSCUtils.read_data(self.bad_ids_pokemon_path))
         self.bad_ids_text = GSCUtils.prepare_check_list(GSCUtils.read_data(self.bad_ids_text_path))
-        self.check_functions = [self.clean_nothing, self.clean_text, self.clean_team_size, self.clean_species, self.clean_move, self.clean_item, self.clean_level, self.check_hp, self.clean_text_final, self.load_stat_exp, self.load_stat_iv, self.check_stat, self.clean_species_sp, self.clean_pp]
+        self.check_functions = [self.clean_nothing, self.clean_text, self.clean_team_size, self.clean_species, self.clean_move, self.clean_item, self.clean_level, self.check_hp, self.clean_text_final, self.load_stat_exp, self.load_stat_iv, self.check_stat, self.clean_species_sp, self.clean_pp, self.clean_experience]
         self.checks_map = self.prepare_checks_map(GSCUtils.read_data(self.checks_map_path), section_sizes)
     
     def clean_check_sanity_checks(func):
@@ -485,8 +529,23 @@ class GSCChecks:
     
     @clean_check_sanity_checks
     def clean_level(self, level):
-        self.level = self.clean_value(level, self.is_level_valid, 100)
+        self.level = GSCUtils.get_level_exp(self.curr_species, self.exp)
         return self.level
+    
+    @clean_check_sanity_checks
+    def clean_experience(self, val):
+        if self.curr_exp_pos == 0:
+            self.exp_range = [GSCUtils.get_exp_level(self.curr_species, GSCUtils.min_level), GSCUtils.get_exp_level(self.curr_species, GSCUtils.max_level)]
+            if val >= 0x80:
+                self.negative_exp = True
+        if self.negative_exp:
+            val = 0
+        curr_read_val = val << (8 * (2 - self.curr_exp_pos))
+        exp_mask = self.curr_exp_pos_masks[self.curr_exp_pos]
+        self.exp = self.check_range(self.exp_range, (self.exp & exp_mask) | curr_read_val)
+        val = (self.exp >> (8 * (2 - self.curr_exp_pos))) & 0xFF
+        self.curr_exp_pos += 1
+        return val
     
     @clean_check_sanity_checks
     def clean_team_size(self, team_size):
@@ -531,11 +590,14 @@ class GSCChecks:
         self.moves = [0,0,0,0]
         self.curr_move = 0
         self.curr_pp = 0
+        self.exp = 0
+        self.negative_exp = False
+        self.curr_exp_pos = 0
         self.curr_hp = 0
         self.curr_pos = 0
         self.curr_iv_pos = 0
         self.curr_exp_id = 0
-        self.curr_exp_pos = 0
+        self.curr_stat_exp_pos = 0
         return self.curr_species
     
     @clean_check_sanity_checks
@@ -549,13 +611,13 @@ class GSCChecks:
     
     @clean_check_sanity_checks
     def load_stat_exp(self, val):
-        calc_val = val << (8 * self.curr_exp_pos)
-        if self.curr_exp_pos == 0:
+        calc_val = val << (8 * self.curr_stat_exp_pos)
+        if self.curr_stat_exp_pos == 0:
             self.stat_exp[self.curr_exp_id] = calc_val
-            self.curr_exp_pos += 1
+            self.curr_stat_exp_pos += 1
         else:
             self.stat_exp[self.curr_exp_id] |= calc_val
-            self.curr_exp_pos = 0
+            self.curr_stat_exp_pos = 0
             self.curr_exp_id += 1
         return val
     
@@ -582,7 +644,7 @@ class GSCChecks:
         self.prepare_text_buffer()
         return char_val
 
-    def check_stat_range(self, stat_range, curr_stat, pos):
+    def check_range(self, stat_range, curr_stat):
         if curr_stat > stat_range[1]:
             curr_stat = stat_range[1]
         if curr_stat < stat_range[0]:
@@ -595,7 +657,7 @@ class GSCChecks:
             self.stat = 0
             self.stat_range = [GSCUtils.stat_calculation(self.curr_stat_id, self.curr_species, self.iv, self.stat_exp, self.level, do_exp=False), GSCUtils.stat_calculation(self.curr_stat_id, self.curr_species, self.iv, self.stat_exp, self.level)]
         curr_read_val = val << (8 * (1 - (self.curr_pos & 1)))
-        self.stat = self.check_stat_range(self.stat_range, (self.stat & 0xFF00) | curr_read_val, self.curr_pos)
+        self.stat = self.check_range(self.stat_range, (self.stat & 0xFF00) | curr_read_val)
         val = (self.stat >> (8 * (1 - (self.curr_pos & 1)))) & 0xFF
         self.curr_pos += 1
         if self.curr_pos >= 2:
@@ -622,11 +684,6 @@ class GSCChecks:
         if checker(value):
             return value
         return default_value
-        
-    def is_level_valid(self, level):
-        if self.do_sanity_checks and level <= 1 or level > 100:
-            return False
-        return True
     
     def is_team_size_valid(self, team_size):
         if self.do_sanity_checks and team_size <= 0 or team_size > 6:
