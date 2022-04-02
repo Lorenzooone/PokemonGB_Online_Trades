@@ -1,5 +1,6 @@
 #!/usr/bin/python3
 from bgb_link_cable_server import BGBLinkCableServer
+from p2p_connection import P2PConnection
 from time import sleep
 from gsc_trading import GSCTrading
 

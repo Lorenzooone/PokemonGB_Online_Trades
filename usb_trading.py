@@ -6,6 +6,7 @@ import traceback
 import time
 import os
 from gsc_trading import GSCTrading
+from p2p_connection import P2PConnection
 
 dev = None
 
