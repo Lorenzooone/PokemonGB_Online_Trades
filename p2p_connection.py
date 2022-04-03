@@ -27,19 +27,31 @@ class P2PConnection (threading.Thread):
     def prepare_get_data(self, type):
         return bytearray(list((P2PConnection.get_request + type).encode()))
     
+    def reset_dict(self, type, chosen_dict):
+        if type in chosen_dict.keys():
+            chosen_dict.pop(type)
+    
+    def reset_recv(self, type):
+        self.reset_dict(type, self.recv_dict)
+    
+    def reset_send(self, type):
+        self.reset_dict(type, self.send_dict)
+    
     def send_data(self, type, data):
         self.send_dict[type] = data
         self.to_send = self.prepare_send_data(type, data)
         while self.to_send is not None:
             sleep(P2PConnection.SLEEP_TIMER)
     
-    def recv_data(self, type):
+    def recv_data(self, type, reset=True):
         if not type in self.recv_dict.keys():
             self.to_send = self.prepare_get_data(type)
             while self.to_send is not None:
                 sleep(P2PConnection.SLEEP_TIMER)
             return None
         else:
+            if reset:
+                return self.recv_dict.pop(type)
             return self.recv_dict[type]
 
     def run(self):

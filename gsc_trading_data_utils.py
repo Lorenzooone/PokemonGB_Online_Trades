@@ -69,6 +69,12 @@ class GSCUtils:
     def write_short(data, pos, short_data):
         data[pos] = (short_data >> 8) & 0xFF
         data[pos+1] = short_data & 0xFF
+        
+    def inc_byte(val):
+        val += 1
+        if val >= 256:
+            val = 0
+        return val
     
     def copy_to_data(data, pos, values):
         data[pos:pos+len(values)] = values[:len(values)]
