@@ -10,9 +10,11 @@ class PokeTrader:
     def __init__(self):
         self.curr_recv = None
         self._server = BGBLinkCableServer(self.update_data, verbose=False, )
+        self._p2p_conn = P2PConnection()
 
     def run(self):
         self._server.start()
+        self._p2p_conn.start()
         
     def update_data(self, data):
         self.curr_recv = data
@@ -35,7 +37,7 @@ class PokeTrader:
 def transfer_func(p):
     print("Waiting for the transfer to start...")
     
-    trade_c = GSCTrading(p.sendByte, p.receiveByte, target_other = "usb.bin", target_self = "emu.bin")
+    trade_c = GSCTrading(p.sendByte, p.receiveByte, p._p2p_conn)
     res = trade_c.trade() # Read the starting information
     
     return

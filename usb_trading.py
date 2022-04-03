@@ -13,7 +13,9 @@ dev = None
 def transfer_func():
     print("Waiting for the transfer to start...")
     
-    trade_c = GSCTrading(sendByte, receiveByte)
+    p2p_conn = P2PConnection(is_server=False)
+    trade_c = GSCTrading(sendByte, receiveByte, p2p_conn)
+    p2p_conn.start()
     res = trade_c.trade() # Read the starting information
     
     return
