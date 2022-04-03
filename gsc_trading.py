@@ -67,6 +67,7 @@ class GSCTrading:
                         found = True
                 if not found:
                     self.sleep_func()
+                    self.swap_byte(self.gsc_no_input)
 
         while next == self.gsc_next_section:
             next = self.swap_byte(next)
@@ -262,6 +263,7 @@ class GSCTrading:
         while received is None:
             self.sleep_func()
             received = fun()
+            self.swap_byte(self.gsc_no_input)
         return received
 
     def do_trade(self, close=False):
