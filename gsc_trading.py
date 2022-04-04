@@ -377,7 +377,7 @@ class GSCTrading:
         self.other_pokemon = GSCTradingData(data_other[1], data_mail=data_other[2])
         return valid
 
-    def trade(self, buffered = True):
+    def player_trade(self, buffered = True):
         self.own_blank_trade = True
         self.other_blank_trade = True
         self.enter_room()

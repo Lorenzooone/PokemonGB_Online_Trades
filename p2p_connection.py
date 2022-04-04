@@ -1,6 +1,7 @@
 import socket
 import threading
 import select
+from websocket_client import WebsocketClient
 from time import sleep
 
 class P2PConnection (threading.Thread):
@@ -11,15 +12,15 @@ class P2PConnection (threading.Thread):
     send_request = "S"
     get_request = "G"
 
-    def __init__(self, verbose=False, host='localhost', port=22222, is_server=True):
+    def __init__(self, verbose=False, host='localhost', port=0):
         threading.Thread.__init__(self)
         self.verbose = verbose
         self.host = host
         self.port = port
-        self.is_server = is_server
         self.to_send = None
         self.recv_dict = {}
         self.send_dict = {}
+        self.ws = WebsocketClient()
     
     def prepare_send_data(self, type, data):
         return bytearray(list((P2PConnection.send_request + type).encode()) + data)
@@ -55,13 +56,22 @@ class P2PConnection (threading.Thread):
             return self.recv_dict[type]
 
     def run(self):
-
+        is_client = False
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            if self.is_server:
-                s.bind((self.host, self.port))
-                s.listen(0)
-                print(f'Listening on {self.host}:{self.port}...')
-                
+            s.bind((self.host, self.port))
+            s.listen(0)
+            real_port = int(s.getsockname()[1])
+            print(f'Listening on {self.host}:{real_port}...')
+            response = self.ws.get_peer(self.host, real_port)
+            
+            if response.startswith("SERVER"):
+                is_server = True
+            else:
+                other_host = response[6:].split(':')[0]
+                other_port = int(response[6:].split(':')[1])
+                is_server = False
+            
+            if is_server:
                 #Get client's connection
                 connection, client_addr = s.accept()
                 print(f'Received connection from {client_addr[0]}:{client_addr[1]}')
@@ -69,7 +79,12 @@ class P2PConnection (threading.Thread):
                 with connection:
                     self.socket_conn(connection)
             else:
-                s.connect((self.host, self.port))
+                is_client = True
+        
+        if not is_server:            
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                print(f'Connecting to {other_host}:{other_port}...')
+                s.connect((other_host, other_port))
                 self.socket_conn(s)
     
     def socket_conn(self, connection):
