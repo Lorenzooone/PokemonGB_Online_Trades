@@ -258,6 +258,16 @@ class GSCTrading:
             return True
         return False
     
+    def check_mon_validity(self, choice, party):
+        index = self.convert_choice(choice)
+        mon_party_id = party.party_info.get_id(index)
+        if mon_party_id is None or mon_party_id != party.pokemon[index].get_species():
+            return False
+        return True
+    
+    def is_trade_valid(self, own_choice, other_choice):
+        return self.check_mon_validity(own_choice, self.own_pokemon) and self.check_mon_validity(other_choice, self.other_pokemon)
+    
     def force_receive(self, fun):
         received = None
         while received is None:
@@ -291,12 +301,21 @@ class GSCTrading:
                 next = self.wait_for_no_data(next, received_choice)
                 next = self.wait_for_no_input(next)
                 accepted = self.wait_for_input(next)
+                
+                # Check validity of trade (if IDs don't match, the game will refuse the trade automatically)
+                valid_trade = self.is_trade_valid(sent_mon, received_choice)
+                if not valid_trade:
+                    accepted = self.gsc_decline_trade
 
                 # Send it to the other player
                 self.send_accepted(accepted)
                 
                 # Get the other player's choice
                 received_accepted = self.force_receive(self.get_accepted)
+                
+                # Check validity of trade (if IDs don't match, the game will refuse the trade automatically)
+                if not valid_trade:
+                    received_accepted = self.gsc_decline_trade
                 
                 # Send the other player's choice to the game
                 next = self.swap_byte(received_accepted)

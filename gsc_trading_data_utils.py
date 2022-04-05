@@ -262,10 +262,14 @@ class GSCTradingPartyInfo:
             self.total = 1
         self.actual_mons = data[start + 1:start + 1 + self.gsc_max_party_mons]
     
-    def get_indexed_id(self, pos):
-        if pos > self.total or pos > self.gsc_max_party_mons:
+    def get_id(self, pos):
+        if pos >= self.get_total() or pos >= self.gsc_max_party_mons:
             return None
-        return self.actual_mons[pos-1]
+        return self.actual_mons[pos]
+    
+    def set_id(self, pos, val):
+        if pos < self.get_total() and pos < self.gsc_max_party_mons:
+            self.actual_mons[pos] = val
     
     def get_total(self):
         return self.total
@@ -432,7 +436,7 @@ class GSCTradingData:
         if not self.pokemon[pos].is_nicknamed():
             self.pokemon[pos].add_nickname(GSCUtils.pokemon_names_gs[evolution], 0)
         self.pokemon[pos].set_species(evolution)
-        self.party_info.actual_mons[pos] = self.pokemon[pos].get_species()
+        self.party_info.set_id(pos, self.pokemon[pos].get_species())
         self.pokemon[pos].update_stats()
         curr_learning = self.pokemon[pos].learnable_moves()
         if curr_learning is not None:
@@ -451,17 +455,17 @@ class GSCTradingData:
         own = self.pokemon[self.get_last_mon_index()]
         self.pokemon[self.get_last_mon_index()] = other.pokemon[other.get_last_mon_index()]
         other.pokemon[other.get_last_mon_index()] = own
-        self.party_info.actual_mons[self.get_last_mon_index()] = self.pokemon[self.get_last_mon_index()].get_species()
-        other.party_info.actual_mons[other.get_last_mon_index()] = other.pokemon[other.get_last_mon_index()].get_species()
+        self.party_info.set_id(self.get_last_mon_index(), self.pokemon[self.get_last_mon_index()].get_species())
+        other.party_info.set_id(other.get_last_mon_index(), other.pokemon[other.get_last_mon_index()].get_species())
     
     @check_pos_validity
     def reorder_party(self, traded_pos):
-        pa_info = self.party_info.actual_mons[traded_pos]
+        pa_info = self.party_info.get_id(traded_pos)
         po_data = self.pokemon[traded_pos]
         for i in range(traded_pos+1,self.get_party_size()):
-            self.party_info.actual_mons[i-1] = self.party_info.actual_mons[i]
+            self.party_info.set_id(i-1, self.party_info.get_id(i))
             self.pokemon[i-1] = self.pokemon[i]
-        self.party_info.actual_mons[self.get_last_mon_index()] = pa_info
+        self.party_info.set_id(self.get_last_mon_index(), pa_info)
         self.pokemon[self.get_last_mon_index()] = po_data
 
     def create_trading_data(self, lengths):
