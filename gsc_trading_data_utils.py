@@ -554,6 +554,15 @@ class GSCChecks:
                 return val
         return wrapper
     
+    def valid_check_sanity_checks(func):
+        def wrapper(*args, **kwargs):
+            self = args[0]
+            if self.do_sanity_checks:
+                return func(*args, **kwargs)
+            else:
+                return True
+        return wrapper
+    
     def set_sanity_checks(self, new_val):
         self.do_sanity_checks = new_val
     
@@ -738,27 +747,24 @@ class GSCChecks:
             return value
         return default_value
     
+    @valid_check_sanity_checks
     def is_team_size_valid(self, team_size):
-        if self.do_sanity_checks and team_size <= 0 or team_size > 6:
+        if team_size <= 0 or team_size > 6:
             return False
         return True
     
+    @valid_check_sanity_checks
     def is_item_valid(self, item):
-        if not self.do_sanity_checks:
-            return True
         return not GSCUtils.check_normal_list(self.bad_ids_items, item)
     
+    @valid_check_sanity_checks
     def is_move_valid(self, move):
-        if not self.do_sanity_checks:
-            return True
         return not GSCUtils.check_normal_list(self.bad_ids_moves, move)
     
+    @valid_check_sanity_checks
     def is_species_valid(self, species):
-        if not self.do_sanity_checks:
-            return True
         return not GSCUtils.check_normal_list(self.bad_ids_pokemon, species)
     
+    @valid_check_sanity_checks
     def is_char_valid(self, char):
-        if not self.do_sanity_checks:
-            return True
         return not GSCUtils.check_normal_list(self.bad_ids_text, char)
