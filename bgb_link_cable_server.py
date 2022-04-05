@@ -1,16 +1,35 @@
 import socket
 import struct
 import select
+import asyncio
 import timeit
 import threading
 from time import sleep
 
 # Implements the BGB link cable protocol
 # See https://bgb.bircd.org/bgblink.html
-class BGBLinkCableServer (threading.Thread):
+
+class BGBLinkCableSender(threading.Thread):
+    SLEEP_TIMER = 0.01
+    def __init__(self, server, connection):
+        threading.Thread.__init__(self)
+        self._server = server
+        self._connection = connection
+    
+    def run(self):
+        while True:
+            send_data = self._server.send_as_master()
+            if send_data:
+                self._connection.send(send_data)
+                self._server.to_send = None
+            sleep(BGBLinkCableSender.SLEEP_TIMER)
+        
+
+class BGBLinkCableServer(threading.Thread):
     PACKET_FORMAT = '<4BI'
     PACKET_SIZE_BYTES = 8
     TRADE_AFTER = 0x2000
+    SLEEP_TIMER = 0.01
 
     def __init__(self, data_handler, verbose=False, host='', port=8765):
         threading.Thread.__init__(self)
@@ -45,7 +64,7 @@ class BGBLinkCableServer (threading.Thread):
             '''
 
             server.bind((self.host, self.port))
-            server.listen(0)  # One Game Boy to rule them all
+            server.listen(1)  # One Game Boy to rule them all
             print(f'Listening on {self.host}:{self.port}...')
 
             connection, client_addr = server.accept()
@@ -62,46 +81,30 @@ class BGBLinkCableServer (threading.Thread):
                         0,  # Patch
                         0   # Timestamp
                     ))
-
-                    a = True
+                    
                     self._last_base_timestamp = self.get_curr_timestamp()
+                    sender = BGBLinkCableSender(self, connection)
+                    sender.start()
+
                     while True:
-                        ready_to_read, ready_to_write, in_error = \
-                           select.select(
-                              [connection],
-                              [connection],
-                              [],
-                              0)
-                        if len(ready_to_read) > 0:
-                            data = connection.recv(self.PACKET_SIZE_BYTES)
-                            if not data:
-                                print('Connection dropped')
-                                break
+                        data = connection.recv(self.PACKET_SIZE_BYTES)
+                        if not data:
+                            print('Connection dropped')
+                            break
 
-                            b1, b2, b3, b4, timestamp = struct.unpack(self.PACKET_FORMAT, data)
-                            #print(str(b1) + ": " + str(self._last_received_timestamp))
-                            if timestamp != 0:
-                                self._last_received_timestamp = timestamp
-                                self._last_base_timestamp = self.get_curr_timestamp()
+                        b1, b2, b3, b4, timestamp = struct.unpack(self.PACKET_FORMAT, data)
+                        #print(str(b1) + ": " + str(self._last_received_timestamp))
+                        if timestamp != 0:
+                            self._last_received_timestamp = timestamp
+                            self._last_base_timestamp = self.get_curr_timestamp()
 
-                            # Cheat, and say we are exactly in sync with the client
-                            
-
-                            handler = self._handlers[b1]
-                            response = handler(b2, b3, b4)
-
-                            if response:
-                                connection.send(response)
+                        # Cheat, and say we are exactly in sync with the client
                         
-                        if a:
-                            a = False
-                            self.last_block = self.get_curr_timestamp()
-                            send_data = self._send_as_master()
-                            if send_data:
-                                connection.send(send_data)
-                                self.to_send = None
-                        if self.get_curr_timestamp()-self.last_block > self.TRADE_AFTER:
-                            a = True
+                        handler = self._handlers[b1]
+                        response = handler(b2, b3, b4)
+
+                        if response:
+                            connection.send(response)
                         
                 except Exception as e:
                     print('Socket error:', str(e))
@@ -129,7 +132,7 @@ class BGBLinkCableServer (threading.Thread):
             self._last_received_timestamp
         )
 
-    def _send_as_master(self):
+    def send_as_master(self):
         if self._last_received_timestamp != 0:
             response = self.to_send
             if response is not None:
