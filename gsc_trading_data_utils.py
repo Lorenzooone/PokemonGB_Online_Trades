@@ -236,6 +236,12 @@ class GSCUtils:
     def get_evolution_item(species):
         return GSCUtils.evolution_ids[species][1]
     
+    def divide_data(data, lengths):
+        div_data = []
+        for i in range(len(lengths)):
+            div_data += [data[sum(lengths[:i]):sum(lengths[:i+1])]]
+        return div_data
+    
 class GSCTradingText:
     def __init__(self, data, start, length=0xB, data_start=0):
         self.values = data[start:start+length]
@@ -275,22 +281,30 @@ class GSCTradingPartyInfo:
         return self.total
 
 class GSCTradingPokémonInfo:
-    def __init__(self, data, start, length=0x30):
+    pokemon_data_len = 0x30
+    ot_name_len = 0xB
+    nickname_len = 0xB
+    mail_len = 0x21
+    sender_len = 0xE
+    
+    all_lengths = [pokemon_data_len, ot_name_len, nickname_len, mail_len, sender_len]
+
+    def __init__(self, data, start, length=pokemon_data_len):
         self.values = data[start:start+length]
         self.mail = None
         self.mail_sender = None
 
     def add_ot_name(self, data, start):
-        self.ot_name = GSCTradingText(data, start)
+        self.ot_name = GSCTradingText(data, start, length=GSCTradingPokémonInfo.ot_name_len)
 
     def add_nickname(self, data, start):
-        self.nickname = GSCTradingText(data, start)
+        self.nickname = GSCTradingText(data, start, length=GSCTradingPokémonInfo.nickname_len)
 
     def add_mail(self, data, start):
-        self.mail = GSCTradingText(data, start, length=0x21)
+        self.mail = GSCTradingText(data, start, length=GSCTradingPokémonInfo.mail_len)
         
     def add_mail_sender(self, data, start):
-        self.mail_sender = GSCTradingText(data, start, length=0xE, data_start=4)
+        self.mail_sender = GSCTradingText(data, start, length=GSCTradingPokémonInfo.sender_len, data_start=4)
     
     def is_nicknamed(self):
         return not self.nickname.values_equal(GSCUtils.pokemon_names_gs[self.get_species()])
@@ -370,6 +384,28 @@ class GSCTradingPokémonInfo:
     
     def get_max_hp(self):
         return GSCUtils.read_short(self.values, 0x24)
+    
+    def has_mail(self):
+        return GSCUtils.is_item_mail(self.get_item())
+
+    def get_data(self):
+        data = [0] * sum(GSCTradingPokémonInfo.all_lengths)
+        sources = [self, self.ot_name, self.nickname]
+        mail_sources = [self.mail, self.mail_sender]
+        for i in range(len(sources)):
+            GSCUtils.copy_to_data(data, sum(GSCTradingPokémonInfo.all_lengths[:i]), sources[i].values)
+        if self.has_mail():
+            for i in range(len(mail_sources)):
+                GSCUtils.copy_to_data(data, sum(GSCTradingPokémonInfo.all_lengths[:i+len(sources)]), mail_sources[i].values)
+
+    def set_data(data):
+        mon = GSCTradingPokémonInfo(data, 0)
+        mon.add_ot_name(data, sum(GSCTradingPokémonInfo.all_lengths[:1]))
+        mon.add_nickname(data, sum(GSCTradingPokémonInfo.all_lengths[:2]))
+        if mon.has_mail():
+            mon.add_mail(data, sum(GSCTradingPokémonInfo.all_lengths[:3]))
+            mon.add_mail_sender(data, sum(GSCTradingPokémonInfo.all_lengths[:4]))
+        return mon
 
 class GSCTradingData:
     gsc_trader_name_pos = 0
@@ -395,7 +431,7 @@ class GSCTradingData:
             self.pokemon += [GSCTradingPokémonInfo(data_pokemon, self.gsc_trading_pokemon_pos + i * self.gsc_trading_pokemon_length)]
             self.pokemon[i].add_ot_name(data_pokemon, self.gsc_trading_pokemon_ot_pos + i * self.gsc_trading_name_length)
             self.pokemon[i].add_nickname(data_pokemon, self.gsc_trading_pokemon_nickname_pos + i * self.gsc_trading_name_length)
-            if data_mail is not None and self.mon_has_mail(i):
+            if data_mail is not None and self.pokemon[i].has_mail():
                 self.pokemon[i].add_mail(data_mail, self.gsc_trading_pokemon_mail_pos + i * self.gsc_trading_mail_length)
                 self.pokemon[i].add_mail_sender(data_mail, self.gsc_trading_pokemon_mail_sender_pos + i * self.gsc_trading_mail_sender_length)
 
@@ -417,7 +453,7 @@ class GSCTradingData:
 
     @check_pos_validity
     def mon_has_mail(self, pos):
-        return GSCUtils.is_item_mail(self.pokemon[pos].get_item())
+        return self.pokemon[pos].has_mail()
 
     def party_has_mail(self):
         mail_owned = False
@@ -493,6 +529,7 @@ class GSCChecks:
     bad_ids_pokemon_path = "useful_data/bad_ids_pokemon.bin"
     bad_ids_text_path = "useful_data/bad_ids_text.bin"
     checks_map_path = "useful_data/checks_map.bin"
+    single_pokemon_checks_map_path = "useful_data/single_pokemon_checks_map.bin"
     curr_exp_pos_masks = [0, 0xFF0000, 0xFFFF00]
     free_value_species = 0xFF
     free_value_moves = 0
@@ -505,6 +542,7 @@ class GSCChecks:
         self.bad_ids_text = GSCUtils.prepare_check_list(GSCUtils.read_data(self.bad_ids_text_path))
         self.check_functions = [self.clean_nothing, self.clean_text, self.clean_team_size, self.clean_species, self.clean_move, self.clean_item, self.clean_level, self.check_hp, self.clean_text_final, self.load_stat_exp, self.load_stat_iv, self.check_stat, self.clean_species_sp, self.clean_pp, self.clean_experience]
         self.checks_map = self.prepare_checks_map(GSCUtils.read_data(self.checks_map_path), section_sizes)
+        self.single_pokemon_checks_map = self.prepare_basic_checks_map(GSCUtils.read_data(self.single_pokemon_checks_map_path))
     
     def clean_check_sanity_checks(func):
         def wrapper(*args, **kwargs):
@@ -526,11 +564,16 @@ class GSCChecks:
         self.curr_species_pos = 0
 
     def prepare_checks_map(self, data, lengths):
-        raw_data_sections = [data[0:lengths[0]], data[lengths[0]:lengths[0]+lengths[1]], data[lengths[0]+lengths[1]:lengths[0]+lengths[1]+lengths[2]]]
+        raw_data_sections = GSCUtils.divide_data(data, lengths)
         call_map = [[],[],[]]
-        for i in range(3):
-            for j in range(lengths[i]):
-                call_map[i] += [self.check_functions[raw_data_sections[i][j]]]
+        for i in range(len(raw_data_sections)):
+            call_map[i] = self.prepare_basic_checks_map(raw_data_sections[i])
+        return call_map
+
+    def prepare_basic_checks_map(self, data):
+        call_map = [None] * len(data)
+        for i in range(len(data)):
+            call_map[i] = self.check_functions[data[i]]
         return call_map
     
     @clean_check_sanity_checks

@@ -200,7 +200,7 @@ class GSCTrading:
             success = False
             data = self.load_trading_data(self.fileBaseTargetName, lengths)
         else:
-            data = [data[:lengths[0]], data[lengths[0]:lengths[0]+lengths[1]], data[lengths[0]+lengths[1]:lengths[0]+lengths[1]+lengths[2]]]
+            data = GSCUtils.divide_data(data, lengths)
         return data, success
 
     def send_big_trading_data(self, data):
@@ -216,8 +216,7 @@ class GSCTrading:
         data = None
         try:
             with open(target, 'rb') as newFile:
-                tmpdata = list(newFile.read(sum(lengths)))
-                data = [tmpdata[0:lengths[0]], tmpdata[lengths[0]: lengths[0]+lengths[1]], tmpdata[lengths[0]+lengths[1]:lengths[0]+lengths[1]+lengths[2]]]
+                data = GSCUtils.divide_data(list(newFile.read(sum(lengths))), lengths)
         except FileNotFoundError as e:
             pass
         return data

@@ -1,7 +1,6 @@
 import socket
 import struct
 import select
-import asyncio
 import timeit
 import threading
 from time import sleep
