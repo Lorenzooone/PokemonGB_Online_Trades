@@ -17,7 +17,7 @@ def transfer_func():
     
     if menu.verbose:
         print("Waiting for the transfer to start...")
-    p2p_conn = P2PConnection(menu)
+    p2p_conn = P2PConnection(menu, kill_function)
     trade_c = GSCTrading(sendByte, receiveByte, p2p_conn, menu)
     p2p_conn.start()
     res = trade_c.player_trade(menu.buffered) # Read the starting information
@@ -35,6 +35,9 @@ def receiveByte():
     #print("recv: 0x%02x" % recv)
     return recv
 
+def kill_function():
+    os.kill(os.getpid(), signal.SIGINT)
+
 # Things for the USB connection part
 def exit_gracefully():
     if dev is not None:
@@ -42,7 +45,7 @@ def exit_gracefully():
         if(os.name != "nt"):
             if reattach:
                 dev.attach_kernel_driver(0)
-    print('Done.')
+    quit()
 
 def signal_handler(sig, frame):
     print('You pressed Ctrl+C!')

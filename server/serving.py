@@ -47,8 +47,6 @@ async def handler(websocket, path):
 
         if path.startswith("/link/"):
             await link_function(websocket, data, path)
-    
-    
 
 start_server = websockets.serve(handler, host, port)
 asyncio.get_event_loop().run_until_complete(start_server)

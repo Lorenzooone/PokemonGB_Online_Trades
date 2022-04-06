@@ -23,7 +23,7 @@ class GSCTradingMenu:
             
     def top_menu_print(self):
         print("1) Start 2-Player trade (Default)")
-        print("1) Start Pool trade")
+        print("2) Start Pool trade")
         print("3) Options")
     
     def options_menu_print(self):

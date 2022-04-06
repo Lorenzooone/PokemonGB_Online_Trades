@@ -12,16 +12,22 @@ class BGBLinkCableSender(threading.Thread):
     SLEEP_TIMER = 0.01
     def __init__(self, server, connection):
         threading.Thread.__init__(self)
+        self.setDaemon(True)
         self._server = server
         self._connection = connection
     
     def run(self):
         while True:
-            send_data = self._server.send_as_master()
-            if send_data:
-                self._connection.send(send_data)
-                self._server.to_send = None
-            sleep(BGBLinkCableSender.SLEEP_TIMER)
+            try:
+                send_data = self._server.send_as_master()
+                if send_data:
+                    self._connection.send(send_data)
+                    self._server.to_send = None
+                sleep(BGBLinkCableSender.SLEEP_TIMER)
+                        
+            except Exception as e:
+                print('Socket error:', str(e))
+                self._server.kill_function()
         
 
 class BGBLinkCableServer(threading.Thread):
@@ -30,8 +36,9 @@ class BGBLinkCableServer(threading.Thread):
     TRADE_AFTER = 0x2000
     SLEEP_TIMER = 0.01
 
-    def __init__(self, data_handler, menu, very_verbose=False):
+    def __init__(self, data_handler, menu, kill_function, very_verbose=False):
         threading.Thread.__init__(self)
+        self.setDaemon(True)
         self._handlers = {
             1: self._handle_version,
             101: self._handle_joypad_update,
@@ -48,6 +55,7 @@ class BGBLinkCableServer(threading.Thread):
         self.very_verbose = very_verbose
         self.host = menu.emulator[0]
         self.port = menu.emulator[1]
+        self.kill_function = kill_function
         self.to_send = None
 
     def get_curr_timestamp(self):
@@ -66,7 +74,7 @@ class BGBLinkCableServer(threading.Thread):
             server.bind((self.host, self.port))
             server.listen(1)  # One Game Boy to rule them all
             if self.verbose:
-                print(f'Listening on {self.host}:{self.port}...')
+                print(f'Listening for bgb on {self.host}:{self.port}...')
 
             connection, client_addr = server.accept()
             if self.verbose:
@@ -92,6 +100,7 @@ class BGBLinkCableServer(threading.Thread):
                         data = connection.recv(self.PACKET_SIZE_BYTES)
                         if not data:
                             print('Connection dropped')
+                            self.kill_function()
                             break
 
                         b1, b2, b3, b4, timestamp = struct.unpack(self.PACKET_FORMAT, data)
@@ -110,6 +119,7 @@ class BGBLinkCableServer(threading.Thread):
                         
                 except Exception as e:
                     print('Socket error:', str(e))
+                    self.kill_function()
 
     def _handle_version(self, major, minor, patch):
         if self.very_verbose:

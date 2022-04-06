@@ -12,8 +12,9 @@ class P2PConnection (threading.Thread):
     send_request = "S"
     get_request = "G"
 
-    def __init__(self, menu, host='localhost', port=0):
+    def __init__(self, menu, kill_function, host='localhost', port=0):
         threading.Thread.__init__(self)
+        self.setDaemon(True)
         self.verbose = menu.verbose
         self.host = host
         self.port = port
@@ -21,7 +22,8 @@ class P2PConnection (threading.Thread):
         self.to_send = None
         self.recv_dict = {}
         self.send_dict = {}
-        self.ws = WebsocketClient(menu.server[0], menu.server[1])
+        self.kill_function = kill_function
+        self.ws = WebsocketClient(menu.server[0], menu.server[1], kill_function)
     
     def prepare_send_data(self, type, data):
         return bytearray(list((P2PConnection.send_request + type).encode()) + data)
@@ -120,3 +122,4 @@ class P2PConnection (threading.Thread):
                 
         except Exception as e:
             print('Socket error:', str(e))
+            self.kill_function()

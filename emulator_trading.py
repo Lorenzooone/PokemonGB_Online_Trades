@@ -1,4 +1,6 @@
 #!/usr/bin/python3
+import signal
+import os
 from bgb_link_cable_server import BGBLinkCableServer
 from p2p_connection import P2PConnection
 from time import sleep
@@ -10,8 +12,8 @@ class PokeTrader:
 
     def __init__(self, menu):
         self.curr_recv = None
-        self._server = BGBLinkCableServer(self.update_data, menu)
-        self._p2p_conn = P2PConnection(menu)
+        self._server = BGBLinkCableServer(self.update_data, menu, kill_function)
+        self._p2p_conn = P2PConnection(menu, kill_function)
 
     def run(self):
         self._server.start()
@@ -34,6 +36,17 @@ class PokeTrader:
         self.curr_recv = None
         return recv
 
+def kill_function():
+    os.kill(os.getpid(), signal.SIGINT)
+
+def exit_gracefully():
+    quit()
+
+def signal_handler(sig, frame):
+    print('You pressed Ctrl+C!')
+    exit_gracefully()
+
+signal.signal(signal.SIGINT, signal_handler)
 
 def transfer_func(p, menu):
     if menu.verbose:
