@@ -12,15 +12,16 @@ class P2PConnection (threading.Thread):
     send_request = "S"
     get_request = "G"
 
-    def __init__(self, verbose=False, host='localhost', port=0):
+    def __init__(self, menu, host='localhost', port=0):
         threading.Thread.__init__(self)
-        self.verbose = verbose
+        self.verbose = menu.verbose
         self.host = host
         self.port = port
+        self.room = menu.room
         self.to_send = None
         self.recv_dict = {}
         self.send_dict = {}
-        self.ws = WebsocketClient()
+        self.ws = WebsocketClient(menu.server[0], menu.server[1])
     
     def prepare_send_data(self, type, data):
         return bytearray(list((P2PConnection.send_request + type).encode()) + data)
@@ -61,8 +62,9 @@ class P2PConnection (threading.Thread):
             s.bind((self.host, self.port))
             s.listen(0)
             real_port = int(s.getsockname()[1])
-            print(f'Listening on {self.host}:{real_port}...')
-            response = self.ws.get_peer(self.host, real_port)
+            if self.verbose:
+                print(f'Listening on {self.host}:{real_port}...')
+            response = self.ws.get_peer(self.host, real_port, self.room)
             
             if response.startswith("SERVER"):
                 is_server = True
@@ -74,7 +76,8 @@ class P2PConnection (threading.Thread):
             if is_server:
                 #Get client's connection
                 connection, client_addr = s.accept()
-                print(f'Received connection from {client_addr[0]}:{client_addr[1]}')
+                if self.verbose:
+                    print(f'Received connection from {client_addr[0]}:{client_addr[1]}')
 
                 with connection:
                     self.socket_conn(connection)
@@ -83,7 +86,8 @@ class P2PConnection (threading.Thread):
         
         if not is_server:            
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                print(f'Connecting to {other_host}:{other_port}...')
+                if self.verbose:
+                    print(f'Connecting to {other_host}:{other_port}...')
                 s.connect((other_host, other_port))
                 self.socket_conn(s)
     

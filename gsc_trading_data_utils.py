@@ -545,8 +545,8 @@ class GSCChecks:
     free_value_species = 0xFF
     free_value_moves = 0
     
-    def __init__(self, section_sizes):
-        self.do_sanity_checks = True
+    def __init__(self, section_sizes, do_sanity_checks):
+        self.do_sanity_checks = do_sanity_checks
         self.bad_ids_items = GSCUtils.prepare_check_list(GSCUtils.read_data(self.bad_ids_items_path))
         self.bad_ids_moves = GSCUtils.prepare_check_list(GSCUtils.read_data(self.bad_ids_moves_path))
         self.bad_ids_pokemon = GSCUtils.prepare_check_list(GSCUtils.read_data(self.bad_ids_pokemon_path))
@@ -573,10 +573,7 @@ class GSCChecks:
             else:
                 return True
         return wrapper
-    
-    def set_sanity_checks(self, new_val):
-        self.do_sanity_checks = new_val
-    
+
     def prepare_text_buffer(self):
         self.curr_text = []
         

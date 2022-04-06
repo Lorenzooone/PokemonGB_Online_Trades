@@ -30,7 +30,7 @@ class BGBLinkCableServer(threading.Thread):
     TRADE_AFTER = 0x2000
     SLEEP_TIMER = 0.01
 
-    def __init__(self, data_handler, verbose=False, host='', port=8765):
+    def __init__(self, data_handler, menu, very_verbose=False):
         threading.Thread.__init__(self)
         self._handlers = {
             1: self._handle_version,
@@ -44,9 +44,10 @@ class BGBLinkCableServer(threading.Thread):
         self._last_received_timestamp = 0
         self._client_data_handler = data_handler
         self.can_go = False
-        self.verbose = verbose
-        self.host = host
-        self.port = port
+        self.verbose = menu.verbose
+        self.very_verbose = very_verbose
+        self.host = menu.emulator[0]
+        self.port = menu.emulator[1]
         self.to_send = None
 
     def get_curr_timestamp(self):
@@ -64,10 +65,12 @@ class BGBLinkCableServer(threading.Thread):
 
             server.bind((self.host, self.port))
             server.listen(1)  # One Game Boy to rule them all
-            print(f'Listening on {self.host}:{self.port}...')
+            if self.verbose:
+                print(f'Listening on {self.host}:{self.port}...')
 
             connection, client_addr = server.accept()
-            print(f'Received connection from {client_addr[0]}:{client_addr[1]}')
+            if self.verbose:
+                print(f'Received connection from {client_addr[0]}:{client_addr[1]}')
 
             with connection:
                 try:
@@ -109,7 +112,7 @@ class BGBLinkCableServer(threading.Thread):
                     print('Socket error:', str(e))
 
     def _handle_version(self, major, minor, patch):
-        if self.verbose:
+        if self.very_verbose:
             print(f'Received version packet: {major}.{minor}.{patch}')
 
         if (major, minor, patch) != (1, 4, 0):
@@ -156,7 +159,7 @@ class BGBLinkCableServer(threading.Thread):
             return self._send_sync()
 
     def _send_sync(self):
-        if self.verbose:
+        if self.very_verbose:
             print('Sending sync3 packet')
 
         # Ack/echo
@@ -174,13 +177,14 @@ class BGBLinkCableServer(threading.Thread):
             self._client_data_handler(data)
 
     def _handle_sync3(self, b2, b3, b4):
-        if self.verbose:
+        if self.very_verbose:
             print('Received sync3 packet')
 
         # Ack/echo
         if b2 == 1:
             if not self.can_go:
-                print("Go!")
+                if self.verbose:
+                    print("Go!")
                 self.can_go = True
             self._client_data_handler(0)
         else:
@@ -195,7 +199,7 @@ class BGBLinkCableServer(threading.Thread):
 
     def _handle_status(self, b2, _b3, _b4):
         # TODO: stop logic when client is paused
-        if self.verbose:
+        if self.very_verbose:
             print('Received status packet:')
             print('\tRunning:', (b2 & 1) == 1)
             print('\tPaused:', (b2 & 2) == 2)

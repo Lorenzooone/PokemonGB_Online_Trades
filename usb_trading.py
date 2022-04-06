@@ -7,16 +7,20 @@ import time
 import os
 from gsc_trading import GSCTrading
 from p2p_connection import P2PConnection
+from gsc_trading_menu import GSCTradingMenu
 
 dev = None
 
 def transfer_func():
-    print("Waiting for the transfer to start...")
+    menu = GSCTradingMenu()
+    menu.handle_menu()
     
-    p2p_conn = P2PConnection()
-    trade_c = GSCTrading(sendByte, receiveByte, p2p_conn)
+    if menu.verbose:
+        print("Waiting for the transfer to start...")
+    p2p_conn = P2PConnection(menu)
+    trade_c = GSCTrading(sendByte, receiveByte, p2p_conn, menu)
     p2p_conn.start()
-    res = trade_c.player_trade() # Read the starting information
+    res = trade_c.player_trade(menu.buffered) # Read the starting information
     
     return
 

@@ -3,14 +3,15 @@ from bgb_link_cable_server import BGBLinkCableServer
 from p2p_connection import P2PConnection
 from time import sleep
 from gsc_trading import GSCTrading
+from gsc_trading_menu import GSCTradingMenu
 
 class PokeTrader:
     SLEEP_TIMER = 0.001
 
-    def __init__(self):
+    def __init__(self, menu):
         self.curr_recv = None
-        self._server = BGBLinkCableServer(self.update_data, verbose=False, )
-        self._p2p_conn = P2PConnection()
+        self._server = BGBLinkCableServer(self.update_data, menu)
+        self._p2p_conn = P2PConnection(menu)
 
     def run(self):
         self._server.start()
@@ -34,14 +35,17 @@ class PokeTrader:
         return recv
 
 
-def transfer_func(p):
-    print("Waiting for the transfer to start...")
+def transfer_func(p, menu):
+    if menu.verbose:
+        print("Waiting for the transfer to start...")
     
-    trade_c = GSCTrading(p.sendByte, p.receiveByte, p._p2p_conn)
-    res = trade_c.player_trade() # Read the starting information
+    trade_c = GSCTrading(p.sendByte, p.receiveByte, p._p2p_conn, menu)
+    res = trade_c.player_trade(menu.buffered) # Read the starting information
     
     return
 
-p = PokeTrader()
+menu = GSCTradingMenu(is_emulator=True)
+menu.handle_menu()
+p = PokeTrader(menu)
 p.run()
-transfer_func(p)
+transfer_func(p, menu)

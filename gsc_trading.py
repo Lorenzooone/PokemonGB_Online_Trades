@@ -25,12 +25,13 @@ class GSCTrading:
     gsc_accept_transfer = "ACP"
     gsc_success_transfer = "SUC"
     
-    def __init__(self, sending_func, receiving_func, connection, base_no_trade = "useful_data/base.bin"):
+    def __init__(self, sending_func, receiving_func, connection, menu, base_no_trade = "useful_data/base.bin"):
         self.sendByte = sending_func
         self.receiveByte = receiving_func
         self.fileBaseTargetName = base_no_trade
-        self.checks = GSCChecks(self.gsc_special_sections_len)
+        self.checks = GSCChecks(self.gsc_special_sections_len, menu.do_sanity_checks)
         self.connection = connection
+        self.menu = menu
         self.own_id = None
         self.other_id = None
         GSCUtils()
@@ -395,7 +396,7 @@ class GSCTrading:
         self.other_pokemon = GSCTradingData(data_other[1], data_mail=data_other[2])
         return valid
 
-    def player_trade(self, buffered = True):
+    def player_trade(self, buffered):
         self.own_blank_trade = True
         self.other_blank_trade = True
         self.enter_room()
