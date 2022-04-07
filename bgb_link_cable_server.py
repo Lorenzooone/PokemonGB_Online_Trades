@@ -33,7 +33,6 @@ class BGBLinkCableSender(threading.Thread):
 class BGBLinkCableServer(threading.Thread):
     PACKET_FORMAT = '<4BI'
     PACKET_SIZE_BYTES = 8
-    TRADE_AFTER = 0x2000
     SLEEP_TIMER = 0.01
 
     def __init__(self, data_handler, menu, kill_function, very_verbose=False):

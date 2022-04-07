@@ -1,4 +1,5 @@
 import math
+
 class GSCUtils:
     evolution_ids_path = "useful_data/evolution_ids.bin"
     mail_ids_path = "useful_data/ids_mail.bin"
@@ -251,6 +252,11 @@ class GSCUtils:
             curr_len += lengths[i]
         total_lengths += [curr_len]
         return total_lengths
+        
+    def default_if_none(data, default_data):
+        if data is not None:
+            return data
+        return default_data
     
 class GSCTradingText:
     def __init__(self, data, start, length=0xB, data_start=0):

@@ -333,16 +333,8 @@ class GSCTrading:
                 if not self.is_choice_decline(received_accepted) and not self.is_choice_decline(accepted):
                     # Apply the trade to the data
                     self.own_pokemon.trade_mon(self.other_pokemon, self.convert_choice(sent_mon), self.convert_choice(received_choice))
-                    evo_own = self.own_pokemon.evolve_mon(self.own_pokemon.get_last_mon_index())
-                    evo_other = self.other_pokemon.evolve_mon(self.other_pokemon.get_last_mon_index())
-                    if evo_own is not None:
-                        self.own_blank_trade = evo_own
-                    else:
-                        self.own_blank_trade = False
-                    if evo_other is not None:
-                        self.other_blank_trade = evo_other
-                    else:
-                        self.other_blank_trade = False
+                    self.own_blank_trade = GSCUtils.default_if_none(self.own_pokemon.evolve_mon(self.own_pokemon.get_last_mon_index()), False)
+                    self.other_blank_trade = GSCUtils.default_if_none(self.other_pokemon.evolve_mon(self.other_pokemon.get_last_mon_index()), False)
 
                     # Conclude the trade successfully
                     next = self.wait_for_input(next)
