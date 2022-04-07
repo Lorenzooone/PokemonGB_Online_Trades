@@ -10,8 +10,13 @@ class GSCTradingClient:
     gsc_choice_transfer = "CHC"
     gsc_accept_transfer = "ACP"
     gsc_success_transfer = "SUC"
+    gsc_buffered_transfer = "BUF"
+    gsc_negotiation_transfer = "NEG"
+    gsc_buffered_value = 0x85
+    gsc_not_buffered_value = 0x12
     gsc_success_value = 0x91
     max_message_id = 255
+    max_negotiation_id = 255
     
     def __init__(self, trader, connection, base_no_trade = "useful_data/base.bin"):
         self.fileBaseTargetName = base_no_trade
@@ -91,11 +96,36 @@ class GSCTradingClient:
     def send_big_trading_data(self, data):
         self.connection.send_data(GSCTradingClient.gsc_full_transfer, data[0]+data[1]+data[2])
         
-    def get_trading_data(self, lengths):
+    def get_trading_data(self):
         return self.connection.recv_data(GSCTradingClient.gsc_single_transfer)
 
     def send_trading_data(self, data):
         self.connection.send_data(GSCTradingClient.gsc_single_transfer, data)
+    
+    def send_buffered_data(self, buffered):
+        val = GSCTradingClient.gsc_not_buffered_value
+        if buffered:
+            val = GSCTradingClient.gsc_buffered_value
+        self.send_single_byte(GSCTradingClient.gsc_buffered_transfer, val)
+    
+    def get_buffered_data(self):
+        buffered = None
+        val = self.get_single_byte(GSCTradingClient.gsc_buffered_transfer)
+        if val is not None:
+            if val == GSCTradingClient.gsc_buffered_value:
+                buffered = True
+            elif val == GSCTradingClient.gsc_not_buffered_value:
+                buffered = False
+        return buffered
+    
+    def send_negotiation_data(self):
+        r = Random()
+        val = r.randint(0, GSCTradingClient.max_negotiation_id)
+        self.send_single_byte(GSCTradingClient.gsc_negotiation_transfer, val)
+        return val
+    
+    def get_negotiation_data(self):
+        return self.get_single_byte(GSCTradingClient.gsc_negotiation_transfer)
 
 
 class GSCTrading:
@@ -174,7 +204,7 @@ class GSCTrading:
             self.comms.send_trading_data(self.write_entire_data(send_buf))
             found = False
             while not found:
-                received = self.comms.get_trading_data([3,3,1])
+                received = self.comms.get_trading_data()
                 if received is not None:
                     recv_buf = self.read_entire_data(received)
                     if recv_buf[1] is not None and recv_buf[1][0] == 0xFFFF and recv_buf[2][0] == index: 
@@ -209,7 +239,7 @@ class GSCTrading:
                 found = False
                 self.comms.send_trading_data(self.write_entire_data(send_buf))
                 while not found:
-                    received = self.comms.get_trading_data([3,3,1])
+                    received = self.comms.get_trading_data()
                     if received is not None:
                         recv_buf = self.read_entire_data(received)
                         if recv_buf[i&1] is not None:
@@ -299,12 +329,13 @@ class GSCTrading:
     def is_trade_valid(self, own_choice, other_choice):
         return self.check_mon_validity(own_choice, self.own_pokemon) and self.check_mon_validity(other_choice, self.other_pokemon)
     
-    def force_receive(self, fun):
+    def force_receive(self, fun, send_nothing=True):
         received = None
         while received is None:
             self.sleep_func()
             received = fun()
-            self.swap_byte(self.gsc_no_input)
+            if send_nothing:
+                self.swap_byte(self.gsc_no_input)
         return received
 
     def do_trade(self, close=False):
@@ -418,10 +449,36 @@ class GSCTrading:
         self.own_pokemon = GSCTradingData(data[1], data_mail=data[2])
         self.other_pokemon = GSCTradingData(data_other[1], data_mail=data_other[2])
         return valid
+    
+    def choose_if_buffered(self, curr_buffered):
+        buffered = curr_buffered
+        self.comms.send_buffered_data(buffered)
+        other_buffered = self.force_receive(self.comms.get_buffered_data, send_nothing=False)
+        if buffered == other_buffered:
+            return buffered
+        change_buffered = None
+        while change_buffered is None:
+            own_val = self.comms.send_negotiation_data()
+            other_val = self.force_receive(self.comms.get_negotiation_data, send_nothing=False)
+            if other_val > own_val:
+                change_buffered = True
+            elif other_val < own_val:
+                change_buffered = False
+        while buffered != other_buffered:
+            if not change_buffered:
+                other_buffered = self.force_receive(self.comms.get_buffered_data, send_nothing=False)
+            else:
+                buffered = self.menu.handle_buffered_change_offer(buffered)
+                self.comms.send_buffered_data(buffered)
+            change_buffered = not change_buffered
+        return buffered
 
     def player_trade(self, buffered):
         self.own_blank_trade = True
         self.other_blank_trade = True
+        buffered = self.choose_if_buffered(buffered)
+        if self.menu.verbose:
+            self.menu.chosen_buffered_print(buffered)
         self.enter_room()
         continue_trading = True
         while True:

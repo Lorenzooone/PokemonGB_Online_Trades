@@ -34,6 +34,19 @@ class GSCTradingMenu:
         if is_emulator:
             self.options_menu_handlers["7"] = self.handle_emulator_host_option
             self.options_menu_handlers["8"] = self.handle_emulator_port_option
+    
+    def get_buffered_str(self, buffered):
+        str_type_of_trade = "Buffered"
+        if not buffered:
+            str_type_of_trade = "Synchronous"
+        return str_type_of_trade
+    
+    def buffered_negotiation_print(self, buffered):
+        print("\nThe other player wants to do a " + self.get_buffered_str(not buffered) + " trade.\nWould you like to switch to a " + self.get_buffered_str(not buffered) + " trade?")
+        print("Choice (y = Yes, n=No): ", end = '')
+    
+    def chosen_buffered_print(self, buffered):
+        print("\nDecided to do a " + self.get_buffered_str(buffered) + " trade.")
             
     def top_menu_print(self):
         print("\n=============== Top level Menu ===============")
@@ -53,10 +66,7 @@ class GSCTradingMenu:
         print("4) Change Verbosity (Current: " + str(self.verbose) + ")")
         
         print("\n=============== 2-Player trade Options ===============")
-        if self.buffered:
-            print("5) Change to Synchronous Trading (Current: Buffered)")
-        else:
-            print("5) Change to Buffered Trading (Current: Synchronous)")
+        print("5) Change to " + self.get_buffered_str(not self.buffered) + " Trading (Current: " + self.get_buffered_str(self.buffered) + ")")
         if self.kill_on_byte_drops:
             print("6) Disable Crash on synchronous byte drop (Current: Enabled)")
         else:
@@ -92,6 +102,18 @@ class GSCTradingMenu:
     
     def change_emu_port_print(self):
         print("Emulator's port: ", end='')
+    
+    def handle_buffered_change_offer(self, buffered):
+        decided = False
+        while not decided:
+            self.buffered_negotiation_print(buffered)
+            x = input().lower()
+            if x == "y" or x == "yes":
+                buffered = not buffered
+                decided = True
+            elif x == "n" or x == "no":
+                decided = True
+        return buffered
     
     def handle_menu(self):
         ret_val = False
