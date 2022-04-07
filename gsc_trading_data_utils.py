@@ -257,6 +257,15 @@ class GSCUtils:
         if data is not None:
             return data
         return default_data
+
+    def load_trading_data(target, lengths):
+        data = None
+        try:
+            with open(target, 'rb') as newFile:
+                data = GSCUtils.divide_data(list(newFile.read(sum(lengths))), lengths)
+        except FileNotFoundError as e:
+            pass
+        return data
     
 class GSCTradingText:
     def __init__(self, data, start, length=0xB, data_start=0):

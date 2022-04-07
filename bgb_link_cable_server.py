@@ -69,8 +69,12 @@ class BGBLinkCableServer(threading.Thread):
             server.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY,
                     1)  # requires nodelay
             '''
-
-            server.bind((self.host, self.port))
+            try:
+                server.bind((self.host, self.port))
+            except Exception as e:
+                print('Socket error:', str(e))
+                self.kill_function()
+                    
             server.listen(1)  # One Game Boy to rule them all
             if self.verbose:
                 print(f'Listening for bgb on {self.host}:{self.port}...')

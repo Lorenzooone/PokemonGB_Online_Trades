@@ -61,13 +61,19 @@ class P2PConnection (threading.Thread):
     def run(self):
         is_client = False
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            s.bind((self.host, self.port))
-            s.listen(0)
+        
+            try:
+                s.bind((self.host, self.port))
+            except Exception as e:
+                print('Socket error:', str(e))
+                self.kill_function()
+                
+            s.listen(1)
             real_port = int(s.getsockname()[1])
             if self.verbose:
                 print(f'Listening on {self.host}:{real_port}...')
+                
             response = self.ws.get_peer(self.host, real_port, self.room)
-            
             if response.startswith("SERVER"):
                 is_server = True
             else:

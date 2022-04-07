@@ -1,23 +1,8 @@
 import time
+from random import Random
 from gsc_trading_data_utils import *
 
-class GSCTrading:
-
-    sleep_timer = 0.01
-    big_sleep_timer = 1.0
-    gsc_enter_room_states = [[0x01, 0xFE, 0x61, 0xD1, 0xFE], [0xFE, 0x61, 0xD1, 0xFE, 0xFE]]
-    gsc_start_trading_states = [[0x75, 0x75, 0x76, 0xFD], [0x75, 0, 0xFD, 0xFD]]
-    gsc_max_consecutive_no_data = 0x100
-    gsc_next_section = 0xFD
-    gsc_no_input = 0xFE
-    gsc_no_data = 0
-    gsc_num_waits = 32
-    gsc_special_sections_len = [0xA, 0x1BC, 0x24C]
-    gsc_stop_trade = 0x7F
-    gsc_first_trade_index = 0x70
-    gsc_decline_trade = 0x71
-    gsc_accept_trade = 0x72
-    gsc_success_value = 0x91
+class GSCTradingClient:
     gsc_full_transfer = "FLL"
     gsc_single_transfer = "SNG"
     gsc_moves_transfer = "MVS"
@@ -25,16 +10,114 @@ class GSCTrading:
     gsc_choice_transfer = "CHC"
     gsc_accept_transfer = "ACP"
     gsc_success_transfer = "SUC"
+    gsc_success_value = 0x91
+    max_message_id = 255
     
-    def __init__(self, sending_func, receiving_func, connection, menu, base_no_trade = "useful_data/base.bin"):
-        self.sendByte = sending_func
-        self.receiveByte = receiving_func
+    def __init__(self, trader, connection, base_no_trade = "useful_data/base.bin"):
         self.fileBaseTargetName = base_no_trade
-        self.checks = GSCChecks(self.gsc_special_sections_len, menu.do_sanity_checks)
         self.connection = connection
-        self.menu = menu
+        self.trader = trader
         self.own_id = None
         self.other_id = None
+    
+    def get_mail_data_only(self):
+        return self.connection.recv_data(GSCTradingClient.gsc_mail_transfer)
+        
+    def send_mail_data_only(self, data):
+        self.connection.send_data(GSCTradingClient.gsc_mail_transfer, data)
+    
+    def get_success(self):
+        return self.get_single_byte(GSCTradingClient.gsc_success_transfer)
+        
+    def send_success(self):
+        self.send_single_byte(GSCTradingClient.gsc_success_transfer, GSCTradingClient.gsc_success_value)
+    
+    def get_move_data_only(self):
+        val = self.connection.recv_data(GSCTradingClient.gsc_moves_transfer)
+        if val is not None:
+            for i in range(4):
+                self.trader.other_pokemon.pokemon[self.trader.other_pokemon.get_last_mon_index()].set_move(i, val[i], max_pp=False)
+                self.trader.other_pokemon.pokemon[self.trader.other_pokemon.get_last_mon_index()].set_pp(i, val[4+i])
+        return val
+        
+    def send_move_data_only(self):
+        val = [0,0,0,0,0,0,0,0]
+        for i in range(4):
+            val[i] = self.trader.own_pokemon.pokemon[self.trader.own_pokemon.get_last_mon_index()].get_move(i)
+            val[4+i] = self.trader.own_pokemon.pokemon[self.trader.own_pokemon.get_last_mon_index()].get_pp(i)
+        self.connection.send_data(GSCTradingClient.gsc_moves_transfer, val)
+    
+    def send_single_byte(self, dest, byte):
+        if self.own_id is None:
+            r = Random()
+            self.own_id = r.randint(0, GSCTradingClient.max_message_id)
+        else:
+            self.own_id = GSCUtils.inc_byte(self.own_id)
+        self.connection.send_data(dest, [self.own_id, byte])
+    
+    def get_single_byte(self, dest):
+        ret = self.connection.recv_data(dest)
+        if ret is not None:
+            if self.other_id is None:
+                self.other_id = ret[0]
+            elif self.other_id != ret[0]:
+                return None
+            self.other_id = GSCUtils.inc_byte(self.other_id)
+            return ret[1]
+        return ret
+    
+    def get_accepted(self):
+        return self.get_single_byte(GSCTradingClient.gsc_accept_transfer)
+                
+    def send_accepted(self, choice):
+        self.send_single_byte(GSCTradingClient.gsc_accept_transfer, choice)
+                
+    def get_chosen_mon(self):
+        return self.get_single_byte(GSCTradingClient.gsc_choice_transfer)
+        
+    def send_chosen_mon(self, choice):
+        self.send_single_byte(GSCTradingClient.gsc_choice_transfer, choice)
+        
+    def get_big_trading_data(self, lengths):
+        success = True
+        data = self.connection.recv_data(GSCTradingClient.gsc_full_transfer)
+        if data is None:
+            success = False
+            data = GSCUtils.load_trading_data(self.fileBaseTargetName, lengths)
+        else:
+            data = GSCUtils.divide_data(data, lengths)
+        return data, success
+
+    def send_big_trading_data(self, data):
+        self.connection.send_data(GSCTradingClient.gsc_full_transfer, data[0]+data[1]+data[2])
+        
+    def get_trading_data(self, lengths):
+        return self.connection.recv_data(GSCTradingClient.gsc_single_transfer)
+
+    def send_trading_data(self, data):
+        self.connection.send_data(GSCTradingClient.gsc_single_transfer, data)
+
+
+class GSCTrading:
+    sleep_timer = 0.01
+    gsc_enter_room_states = [[0x01, 0xFE, 0x61, 0xD1, 0xFE], [0xFE, 0x61, 0xD1, 0xFE, 0xFE]]
+    gsc_start_trading_states = [[0x75, 0x75, 0x76, 0xFD], [0x75, 0, 0xFD, 0xFD]]
+    gsc_max_consecutive_no_data = 0x100
+    gsc_next_section = 0xFD
+    gsc_no_input = 0xFE
+    gsc_no_data = 0
+    gsc_special_sections_len = [0xA, 0x1BC, 0x24C]
+    gsc_stop_trade = 0x7F
+    gsc_first_trade_index = 0x70
+    gsc_decline_trade = 0x71
+    gsc_accept_trade = 0x72
+    
+    def __init__(self, sending_func, receiving_func, connection, menu):
+        self.sendByte = sending_func
+        self.receiveByte = receiving_func
+        self.checks = GSCChecks(self.gsc_special_sections_len, menu.do_sanity_checks)
+        self.comms = GSCTradingClient(self, connection)
+        self.menu = menu
         GSCUtils()
 
     def send_predefined_section(self, states_list, stop_to=0, die_on_no_data=False):
@@ -65,10 +148,10 @@ class GSCTrading:
         if not buffered:
             # Wait for a connection to be established
             send_buf = [[0xFFFF,0xFF],[0xFFFF,0xFF],[index]]
-            self.send_trading_data(self.write_entire_data(send_buf))
+            self.comms.send_trading_data(self.write_entire_data(send_buf))
             found = False
             while not found:
-                received = self.get_trading_data([3,3,1])
+                received = self.comms.get_trading_data([3,3,1])
                 if received is not None:
                     recv_buf = self.read_entire_data(received)
                     if recv_buf[1] is not None and recv_buf[1][0] == 0xFFFF and recv_buf[2][0] == index: 
@@ -100,9 +183,9 @@ class GSCTrading:
             send_buf = [[0,next],[0xFFFF,0xFF],[index]]
             for i in range(length + 1):
                 found = False
-                self.send_trading_data(self.write_entire_data(send_buf))
+                self.comms.send_trading_data(self.write_entire_data(send_buf))
                 while not found:
-                    received = self.get_trading_data([3,3,1])
+                    received = self.comms.get_trading_data([3,3,1])
                     if received is not None:
                         recv_buf = self.read_entire_data(received)
                         if recv_buf[i&1] is not None:
@@ -144,91 +227,6 @@ class GSCTrading:
     def write_sync_data(self, data):
         return [(data[0]>>8)&0xFF, data[0]&0xFF, data[1]]
     
-    def get_mail_data_only(self):
-        return self.connection.recv_data(self.gsc_mail_transfer)
-        
-    def send_mail_data_only(self, data):
-        self.connection.send_data(self.gsc_mail_transfer, data)
-    
-    def get_success(self):
-        return self.get_single_byte(self.gsc_success_transfer)
-        
-    def send_success(self):
-        self.send_single_byte(self.gsc_success_transfer, self.gsc_success_value)
-    
-    def get_move_data_only(self):
-        val = self.connection.recv_data(self.gsc_moves_transfer)
-        if val is not None:
-            for i in range(4):
-                self.other_pokemon.pokemon[self.other_pokemon.get_last_mon_index()].set_move(i, val[i], max_pp=False)
-                self.other_pokemon.pokemon[self.other_pokemon.get_last_mon_index()].set_pp(i, val[4+i])
-        return val
-        
-    def send_move_data_only(self):
-        val = [0,0,0,0,0,0,0,0]
-        for i in range(4):
-            val[i] = self.own_pokemon.pokemon[self.own_pokemon.get_last_mon_index()].get_move(i)
-            val[4+i] = self.own_pokemon.pokemon[self.own_pokemon.get_last_mon_index()].get_pp(i)
-        self.connection.send_data(self.gsc_moves_transfer, val)
-    
-    def send_single_byte(self, dest, byte):
-        if self.own_id is None:
-            self.own_id = 0
-        else:
-            self.own_id = GSCUtils.inc_byte(self.own_id)
-        self.connection.send_data(dest, [self.own_id, byte])
-    
-    def get_single_byte(self, dest):
-        ret = self.connection.recv_data(dest)
-        if ret is not None:
-            if self.other_id is None:
-                self.other_id = ret[0]
-            elif self.other_id != ret[0]:
-                return None
-            self.other_id = GSCUtils.inc_byte(self.other_id)
-            return ret[1]
-        return ret
-    
-    def get_accepted(self):
-        return self.get_single_byte(self.gsc_accept_transfer)
-                
-    def send_accepted(self, choice):
-        self.send_single_byte(self.gsc_accept_transfer, choice)
-                
-    def get_chosen_mon(self):
-        return self.get_single_byte(self.gsc_choice_transfer)
-        
-    def send_chosen_mon(self, choice):
-        self.send_single_byte(self.gsc_choice_transfer, choice)
-        
-    def get_big_trading_data(self, lengths):
-        success = True
-        data = self.connection.recv_data(self.gsc_full_transfer)
-        if data is None:
-            success = False
-            data = self.load_trading_data(self.fileBaseTargetName, lengths)
-        else:
-            data = GSCUtils.divide_data(data, lengths)
-        return data, success
-
-    def send_big_trading_data(self, data):
-        self.connection.send_data(self.gsc_full_transfer, data[0]+data[1]+data[2])
-        
-    def get_trading_data(self, lengths):
-        return self.connection.recv_data(self.gsc_single_transfer)
-
-    def send_trading_data(self, data):
-        self.connection.send_data(self.gsc_single_transfer, data)
-
-    def load_trading_data(self, target, lengths):
-        data = None
-        try:
-            with open(target, 'rb') as newFile:
-                data = GSCUtils.divide_data(list(newFile.read(sum(lengths))), lengths)
-        except FileNotFoundError as e:
-            pass
-        return data
-
     def end_trade(self):
         next = 0
         target = self.gsc_stop_trade
@@ -293,10 +291,10 @@ class GSCTrading:
 
             if not close:
                 # Send it to the other player
-                self.send_chosen_mon(sent_mon)
+                self.comms.send_chosen_mon(sent_mon)
             
                 # Get the other player's choice
-                received_choice = self.force_receive(self.get_chosen_mon)
+                received_choice = self.force_receive(self.comms.get_chosen_mon)
             else:
                 received_choice = self.gsc_stop_trade
 
@@ -315,10 +313,10 @@ class GSCTrading:
                     accepted = self.gsc_decline_trade
 
                 # Send it to the other player
-                self.send_accepted(accepted)
+                self.comms.send_accepted(accepted)
                 
                 # Get the other player's choice
-                received_accepted = self.force_receive(self.get_accepted)
+                received_accepted = self.force_receive(self.comms.get_accepted)
                 
                 # Check validity of trade (if IDs don't match, the game will refuse the trade automatically)
                 if not valid_trade:
@@ -340,10 +338,10 @@ class GSCTrading:
                     next = self.wait_for_input(next)
 
                     # Send it to the other player
-                    self.send_success()
+                    self.comms.send_success()
 
                     # Get the other player's choice
-                    self.force_receive(self.get_success)
+                    self.force_receive(self.comms.get_success)
 
                     trade_completed = True
                     next = self.swap_byte(next)
@@ -371,10 +369,10 @@ class GSCTrading:
         elif pokemon_own_mail and not pokemon_other_mail:
             mail_data, mail_data_other = self.read_section(2, GSCUtils.no_mail_section, True)
             if not buffered:
-                self.send_mail_data_only(mail_data)
+                self.comms.send_mail_data_only(mail_data)
         elif not pokemon_own_mail and pokemon_other_mail:
             if not buffered:
-                send_data[2] = self.force_receive(self.get_mail_data_only)
+                send_data[2] = self.force_receive(self.comms.get_mail_data_only)
             mail_data, mail_data_other = self.read_section(2, send_data[2], True)
         else:
             mail_data, mail_data_other = self.read_section(2, send_data[2], buffered)
@@ -388,9 +386,9 @@ class GSCTrading:
         return True
     
     def buffered_trade(self):
-        data, valid = self.get_big_trading_data(self.gsc_special_sections_len)
+        data, valid = self.comms.get_big_trading_data(self.gsc_special_sections_len)
         data, data_other = self.trade_starting_sequence(True, send_data=data)
-        self.send_big_trading_data(data)
+        self.comms.send_big_trading_data(data)
         self.own_pokemon = GSCTradingData(data[1], data_mail=data[2])
         self.other_pokemon = GSCTradingData(data_other[1], data_mail=data_other[2])
         return valid
@@ -410,11 +408,11 @@ class GSCTrading:
                     valid = self.synchronous_trade()
             else:
                 if self.other_blank_trade:
-                    self.force_receive(self.get_move_data_only)
+                    self.force_receive(self.comms.get_move_data_only)
                 data, data_other = self.trade_starting_sequence(True, send_data=self.other_pokemon.create_trading_data(GSCTrading.gsc_special_sections_len))
                 if  self.own_blank_trade:
                     self.own_pokemon = GSCTradingData(data[1], data_mail=data[2])
-                    self.send_move_data_only()
+                    self.comms.send_move_data_only()
             self.own_blank_trade = True
             self.other_blank_trade = True
             self.do_trade(close=not valid)
