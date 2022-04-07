@@ -744,7 +744,7 @@ class GSCChecks:
     
     @clean_check_sanity_checks
     def clean_text_final(self, char):
-        char_val = self.clean_value(char, self.is_char_valid, 0xE6)
+        char_val = GSCUtils.end_of_line
         self.curr_text += [char_val]
         # Possibility to put bad words filters here
         self.prepare_text_buffer()
