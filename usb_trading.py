@@ -45,7 +45,7 @@ def exit_gracefully():
         if(os.name != "nt"):
             if reattach:
                 dev.attach_kernel_driver(0)
-    quit()
+    os._exit(1)
 
 def signal_handler(sig, frame):
     print('You pressed Ctrl+C!')

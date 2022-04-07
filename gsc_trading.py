@@ -7,6 +7,7 @@ class GSCTrading:
     big_sleep_timer = 1.0
     gsc_enter_room_states = [[0x01, 0xFE, 0x61, 0xD1, 0xFE], [0xFE, 0x61, 0xD1, 0xFE, 0xFE]]
     gsc_start_trading_states = [[0x75, 0x75, 0x76, 0xFD], [0x75, 0, 0xFD, 0xFD]]
+    gsc_max_consecutive_no_data = 0x100
     gsc_next_section = 0xFD
     gsc_no_input = 0xFE
     gsc_no_data = 0
@@ -36,16 +37,22 @@ class GSCTrading:
         self.other_id = None
         GSCUtils()
 
-    def send_predefined_section(self, states_list, stop_before_last):
+    def send_predefined_section(self, states_list, stop_to=0, die_on_no_data=False):
         sending = 0
-        stop_to = 0
-        if stop_before_last:
-            stop_to = 1
+        consecutive_no_data = 0
         while(sending < len(states_list[0]) - stop_to):
             next = states_list[0][sending]
             recv = self.swap_byte(next)
             if(recv == states_list[1][sending]):
                 sending += 1
+            elif die_on_no_data and sending == 0:
+                if  recv == self.gsc_no_data:
+                    consecutive_no_data += 1
+                    if consecutive_no_data >= self.gsc_max_consecutive_no_data:
+                        return False
+                else:
+                    consecutive_no_data = 0
+        return True
                 
     def read_section(self, index, send_data, buffered):
         length = self.gsc_special_sections_len[index]
@@ -355,7 +362,7 @@ class GSCTrading:
                 self.end_trade()
 
     def enter_room(self):
-        self.send_predefined_section(self.gsc_enter_room_states, False)
+        self.send_predefined_section(self.gsc_enter_room_states)
         
     def trade_starting_sequence(self, buffered, send_data = [None, None, None]):
         random_data, random_data_other = self.read_section(0, send_data[0], buffered)
@@ -400,8 +407,10 @@ class GSCTrading:
         self.own_blank_trade = True
         self.other_blank_trade = True
         self.enter_room()
+        continue_trading = True
         while True:
-            self.send_predefined_section(self.gsc_start_trading_states, True)
+            if not self.send_predefined_section(self.gsc_start_trading_states, stop_to=1, die_on_no_data=True):
+                break
             if self.own_blank_trade and self.other_blank_trade:
                 if buffered:
                     valid = self.buffered_trade()

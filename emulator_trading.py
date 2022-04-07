@@ -40,7 +40,7 @@ def kill_function():
     os.kill(os.getpid(), signal.SIGINT)
 
 def exit_gracefully():
-    quit()
+    os._exit(1)
 
 def signal_handler(sig, frame):
     print('You pressed Ctrl+C!')

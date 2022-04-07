@@ -20,7 +20,7 @@ class WebsocketClient:
                 data = await websocket.recv()
                 return data
         except Exception as e:
-            print('Websocket error:', str(e))
+            print('Websocket client error:', str(e))
             WebsocketClient.kill_function()
     
     def get_peer(self, serving_host, serving_port, room):
