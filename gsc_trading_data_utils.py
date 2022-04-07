@@ -1,5 +1,99 @@
 import math
 
+class GSCUtilsLoaders:
+
+    def prepare_dict(target):
+        lines = GSCUtilsLoaders.read_text_file(target)
+        dict = {}
+        for i in lines:
+            dict[i.split()[0]] = int(i.split()[1])
+        return dict
+
+    def prepare_exp_lists(lines):
+        exp_lists = [[], [], [], [], [], []]
+        for i in range(GSCUtils.max_level):
+            columns = lines[i].split()
+            for j in range(6):
+                exp_lists[j] += [int(columns[j])]
+        return exp_lists
+    
+    def read_text_file(target):
+        try:
+            with open(target,"r", encoding="utf-8") as f:
+                lines=f.readlines()
+        except FileNotFoundError as e:
+            return []
+        return lines
+    
+    def prepare_learnsets(data):
+        dict = {}
+        entries = data[0]
+        for i in range(entries):
+            pos = GSCUtilsMisc.read_short(data, 1 + (i * 2))
+            entry = {}
+            species = data[pos]
+            levels = data[pos+1]
+            pos += 2
+            for j in range(levels):
+                level = data[pos]
+                num_moves = data[pos+1]
+                moves_list = []
+                pos += 2
+                for k in range(num_moves):
+                    moves_list += [data[pos]]
+                    pos += 1
+                entry[level] = moves_list
+            dict[species] = entry
+        return dict
+
+    def text_to_bytes(target, text_conv_target):
+        names = GSCUtilsLoaders.read_text_file(target)
+        text_conv_dict = GSCUtilsLoaders.prepare_dict(text_conv_target)
+        text_conv_dict['\n'] = GSCUtils.end_of_line
+        byte_names = []
+        for i in range(0x100):
+            byte_names += [[GSCUtils.end_of_line]*GSCUtils.name_size]
+            for j in range(len(names[i])):
+                letter = names[i][j].upper()
+                if letter in text_conv_dict:
+                    byte_names[i][j] = text_conv_dict[letter]
+                else:
+                    print("UNRECOGNIZED CHARACTER: " + letter)
+        return byte_names
+
+    def prepare_check_list(data):
+        ret = [False] * 0x100
+        if data is not None:
+            for i in data:
+                ret[i] = True
+        return ret
+    
+    def prepare_evolution_check_list(data):
+        ret = [(False, None, None)] * 0x100
+        
+        if data is not None:
+            data_len = int(len(data)/3)
+            for i in range(data_len):
+                ret[data[i]] = (True, None, data[i + (2*data_len)])
+                if data[i + data_len] != 0:
+                    ret[data[i]] = (True, data[i + data_len], data[i + (2*data_len)])
+        return ret
+
+    def prepare_stats(data):
+        ret = [0] * 0x100
+        for i in range(0x100):
+            ret[i] = data[(i)*6:(i+1)*6]
+        return ret
+
+    def load_trading_data(target, lengths):
+        data = None
+        try:
+            with open(target, 'rb') as newFile:
+                data = GSCUtilsMisc.divide_data(list(newFile.read(sum(lengths))), lengths)
+        except FileNotFoundError as e:
+            pass
+        return data
+
 class GSCUtils:
     evolution_ids_path = "useful_data/evolution_ids.bin"
     mail_ids_path = "useful_data/ids_mail.bin"
@@ -33,24 +127,95 @@ class GSCUtils:
     
     def __init__(self):
         if GSCUtils.evolution_ids is None:
-            GSCUtils.evolution_ids = GSCUtils.prepare_evolution_check_list(GSCUtils.read_data(GSCUtils.evolution_ids_path))
+            GSCUtils.evolution_ids = GSCUtilsLoaders.prepare_evolution_check_list(GSCUtilsMisc.read_data(GSCUtils.evolution_ids_path))
         if GSCUtils.mail_ids is None:
-            GSCUtils.mail_ids = GSCUtils.prepare_check_list(GSCUtils.read_data(GSCUtils.mail_ids_path))
+            GSCUtils.mail_ids = GSCUtilsLoaders.prepare_check_list(GSCUtilsMisc.read_data(GSCUtils.mail_ids_path))
         if GSCUtils.no_mail_section is None:
-            GSCUtils.no_mail_section = GSCUtils.read_data(GSCUtils.no_mail_path)
+            GSCUtils.no_mail_section = GSCUtilsMisc.read_data(GSCUtils.no_mail_path)
         if GSCUtils.base_stats is None:
-            GSCUtils.base_stats = GSCUtils.prepare_stats(GSCUtils.read_data(GSCUtils.base_stats_path))
+            GSCUtils.base_stats = GSCUtilsLoaders.prepare_stats(GSCUtilsMisc.read_data(GSCUtils.base_stats_path))
         if GSCUtils.pokemon_names_gs is None:
-            GSCUtils.pokemon_names_gs = GSCUtils.text_to_bytes(GSCUtils.pokemon_names_gs_path, GSCUtils.text_conv_path)
+            GSCUtils.pokemon_names_gs = GSCUtilsLoaders.text_to_bytes(GSCUtils.pokemon_names_gs_path, GSCUtils.text_conv_path)
         if GSCUtils.moves_pp_list is None:
-            GSCUtils.moves_pp_list = GSCUtils.read_data(GSCUtils.moves_pp_list_path)
+            GSCUtils.moves_pp_list = GSCUtilsMisc.read_data(GSCUtils.moves_pp_list_path)
         if GSCUtils.learnsets is None:
-            GSCUtils.learnsets = GSCUtils.prepare_learnsets(GSCUtils.read_data(GSCUtils.learnset_evos_path))
+            GSCUtils.learnsets = GSCUtilsLoaders.prepare_learnsets(GSCUtilsMisc.read_data(GSCUtils.learnset_evos_path))
         if GSCUtils.exp_groups is None:
-            GSCUtils.exp_groups = GSCUtils.read_data(GSCUtils.exp_groups_path)
+            GSCUtils.exp_groups = GSCUtilsMisc.read_data(GSCUtils.exp_groups_path)
         if GSCUtils.exp_lists is None:
-            GSCUtils.exp_lists = GSCUtils.prepare_exp_lists(GSCUtils.read_text_file(GSCUtils.exp_lists_path))
+            GSCUtils.exp_lists = GSCUtilsLoaders.prepare_exp_lists(GSCUtilsLoaders.read_text_file(GSCUtils.exp_lists_path))
     
+    def get_level_exp(species, exp):
+        start = GSCUtils.min_level
+        end = GSCUtils.max_level
+        if exp < GSCUtils.get_exp_level(species, start + 1):
+            return start
+        if exp >= GSCUtils.get_exp_level(species, end):
+            return end
+        end_search = False
+        while not end_search:
+            check_level = math.floor((start+end)/2)
+            level_exp = GSCUtils.get_exp_level(species, check_level)
+            next_level_exp = GSCUtils.get_exp_level(species, check_level + 1)
+            if exp < level_exp:
+                end = check_level
+            elif exp > next_level_exp:
+                start = check_level
+            elif exp == next_level_exp:
+                return check_level + 1
+            else:
+                return check_level
+        return GSCUtils.max_level
+    
+    def get_exp_level(species, level):
+        return GSCUtils.exp_lists[GSCUtils.exp_groups[species]][level-1]
+    
+    def final_stat_calc_step(stat_id, level):
+        if stat_id != GSCUtils.hp_stat_id:
+            return 5
+        return level + 10
+    
+    def get_iv(iv, stat_id):
+        if stat_id != GSCUtils.hp_stat_id:
+            return iv[GSCUtils.stat_id_iv_conv_table[stat_id]]
+        return ((iv[0]&1)<<3) | ((iv[1]&1)<<2) | ((iv[2]&1)<<1) | (iv[3]&1)
+    
+    def get_exp(stat_exp, stat_id):
+        return stat_exp[GSCUtils.stat_id_exp_conv_table[stat_id]]
+    
+    def get_base_stat(species, stat_id):
+        return GSCUtils.base_stats[species][GSCUtils.stat_id_base_conv_table[stat_id]]
+    
+    def stat_calculation(stat_id, species, ivs, stat_exp, level, do_exp=True):
+        inter_value = (GSCUtils.get_base_stat(species, stat_id) + GSCUtils.get_iv(ivs, stat_id)) * 2
+        if do_exp:
+            inter_value += math.floor(math.ceil(math.sqrt(GSCUtils.get_exp(stat_exp, stat_id))/4))
+        inter_value = math.floor((inter_value*level)/100)
+        return inter_value + GSCUtils.final_stat_calc_step(stat_id, level)
+    
+    def is_item_mail(item):
+        return GSCUtilsMisc.check_normal_list(GSCUtils.mail_ids, item)
+    
+    def is_evolving(species, item):
+        if species >= 0x100 or species < 0:
+            return False
+        evo_info = GSCUtils.evolution_ids[species]
+        if evo_info[0]:
+            if item != GSCUtils.everstone_id:
+                if (evo_info[1] is None) or (item == evo_info[1]):
+                    return True
+        return False
+    
+    def get_evolution(species, item):
+        if not GSCUtils.is_evolving(species, item):
+            return None
+        return GSCUtils.evolution_ids[species][2]
+    
+    def get_evolution_item(species):
+        return GSCUtils.evolution_ids[species][1]
+
+class GSCUtilsMisc:
+
     def read_data(target):
         data = None
         try:
@@ -79,167 +244,15 @@ class GSCUtils:
     
     def copy_to_data(data, pos, values):
         data[pos:pos+len(values)] = values[:len(values)]
-    
-    def prepare_dict(target):
-        lines = GSCUtils.read_text_file(target)
-        dict = {}
-        for i in lines:
-            dict[i.split()[0]] = int(i.split()[1])
-        return dict
-    
-    def get_level_exp(species, exp):
-        start = GSCUtils.min_level
-        end = GSCUtils.max_level
-        if exp < GSCUtils.get_exp_level(species, start + 1):
-            return start
-        if exp >= GSCUtils.get_exp_level(species, end):
-            return end
-        end_search = False
-        while not end_search:
-            check_level = math.floor((start+end)/2)
-            level_exp = GSCUtils.get_exp_level(species, check_level)
-            next_level_exp = GSCUtils.get_exp_level(species, check_level + 1)
-            if exp < level_exp:
-                end = check_level
-            elif exp > next_level_exp:
-                start = check_level
-            elif exp == next_level_exp:
-                return check_level + 1
-            else:
-                return check_level
-        return GSCUtils.max_level
-    
-    def get_exp_level(species, level):
-        return GSCUtils.exp_lists[GSCUtils.exp_groups[species]][level-1]
-
-    def prepare_exp_lists(lines):
-        exp_lists = [[], [], [], [], [], []]
-        for i in range(GSCUtils.max_level):
-            columns = lines[i].split()
-            for j in range(6):
-                exp_lists[j] += [int(columns[j])]
-        return exp_lists
-    
-    def read_text_file(target):
-        try:
-            with open(target,"r", encoding="utf-8") as f:
-                lines=f.readlines()
-        except FileNotFoundError as e:
-            return []
-        return lines
-    
-    def prepare_learnsets(data):
-        dict = {}
-        entries = data[0]
-        for i in range(entries):
-            pos = GSCUtils.read_short(data, 1 + (i * 2))
-            entry = {}
-            species = data[pos]
-            levels = data[pos+1]
-            pos += 2
-            for j in range(levels):
-                level = data[pos]
-                num_moves = data[pos+1]
-                moves_list = []
-                pos += 2
-                for k in range(num_moves):
-                    moves_list += [data[pos]]
-                    pos += 1
-                entry[level] = moves_list
-            dict[species] = entry
-        return dict
-    
-    def final_stat_calc_step(stat_id, level):
-        if stat_id != GSCUtils.hp_stat_id:
-            return 5
-        return level + 10
-    
-    def get_iv(iv, stat_id):
-        if stat_id != GSCUtils.hp_stat_id:
-            return iv[GSCUtils.stat_id_iv_conv_table[stat_id]]
-        return ((iv[0]&1)<<3) | ((iv[1]&1)<<2) | ((iv[2]&1)<<1) | (iv[3]&1)
-    
-    def get_exp(stat_exp, stat_id):
-        return stat_exp[GSCUtils.stat_id_exp_conv_table[stat_id]]
-    
-    def get_base_stat(species, stat_id):
-        return GSCUtils.base_stats[species][GSCUtils.stat_id_base_conv_table[stat_id]]
-    
-    def stat_calculation(stat_id, species, ivs, stat_exp, level, do_exp=True):
-        inter_value = (GSCUtils.get_base_stat(species, stat_id) + GSCUtils.get_iv(ivs, stat_id)) * 2
-        if do_exp:
-            inter_value += math.floor(math.ceil(math.sqrt(GSCUtils.get_exp(stat_exp, stat_id))/4))
-        inter_value = math.floor((inter_value*level)/100)
-        return inter_value + GSCUtils.final_stat_calc_step(stat_id, level)
-
-    def text_to_bytes(target, text_conv_target):
-        names = GSCUtils.read_text_file(target)
-        text_conv_dict = GSCUtils.prepare_dict(text_conv_target)
-        text_conv_dict['\n'] = GSCUtils.end_of_line
-        byte_names = []
-        for i in range(0x100):
-            byte_names += [[GSCUtils.end_of_line]*GSCUtils.name_size]
-            for j in range(len(names[i])):
-                letter = names[i][j].upper()
-                if letter in text_conv_dict:
-                    byte_names[i][j] = text_conv_dict[letter]
-                else:
-                    print("UNRECOGNIZED CHARACTER: " + letter)
-        return byte_names
-
-    def prepare_check_list(data):
-        ret = [False] * 0x100
-        if data is not None:
-            for i in data:
-                ret[i] = True
-        return ret
-    
-    def prepare_evolution_check_list(data):
-        ret = [(False, None, None)] * 0x100
-        
-        if data is not None:
-            data_len = int(len(data)/3)
-            for i in range(data_len):
-                ret[data[i]] = (True, None, data[i + (2*data_len)])
-                if data[i + data_len] != 0:
-                    ret[data[i]] = (True, data[i + data_len], data[i + (2*data_len)])
-        return ret
         
     def check_normal_list(checking_list, value):
         if value >= 0x100 or value < 0:
             return False
         return checking_list[value]
-
-    def prepare_stats(data):
-        ret = [0] * 0x100
-        for i in range(0x100):
-            ret[i] = data[(i)*6:(i+1)*6]
-        return ret
-    
-    def is_item_mail(item):
-        return GSCUtils.check_normal_list(GSCUtils.mail_ids, item)
-    
-    def is_evolving(species, item):
-        if species >= 0x100 or species < 0:
-            return False
-        evo_info = GSCUtils.evolution_ids[species]
-        if evo_info[0]:
-            if item != GSCUtils.everstone_id:
-                if (evo_info[1] is None) or (item == evo_info[1]):
-                    return True
-        return False
-    
-    def get_evolution(species, item):
-        if not GSCUtils.is_evolving(species, item):
-            return None
-        return GSCUtils.evolution_ids[species][2]
-    
-    def get_evolution_item(species):
-        return GSCUtils.evolution_ids[species][1]
     
     def divide_data(data, lengths):
         div_data = []
-        total_lengths = GSCUtils.calc_divide_lengths(lengths)
+        total_lengths = GSCUtilsMisc.calc_divide_lengths(lengths)
         for i in range(len(lengths)):
             div_data += [data[total_lengths[i]:total_lengths[i+1]]]
         return div_data
@@ -257,15 +270,6 @@ class GSCUtils:
         if data is not None:
             return data
         return default_data
-
-    def load_trading_data(target, lengths):
-        data = None
-        try:
-            with open(target, 'rb') as newFile:
-                data = GSCUtils.divide_data(list(newFile.read(sum(lengths))), lengths)
-        except FileNotFoundError as e:
-            pass
-        return data
     
 class GSCTradingText:
     def __init__(self, data, start, length=0xB, data_start=0):
@@ -318,7 +322,7 @@ class GSCTradingPokémonInfo:
         self.values = data[start:start+length]
         self.mail = None
         self.mail_sender = None
-        self._precalced_lengths = GSCUtils.calc_divide_lengths(GSCTradingPokémonInfo.all_lengths)
+        self._precalced_lengths = GSCUtilsMisc.calc_divide_lengths(GSCTradingPokémonInfo.all_lengths)
 
     def add_ot_name(self, data, start):
         self.ot_name = GSCTradingText(data, start, length=GSCTradingPokémonInfo.ot_name_len)
@@ -387,29 +391,29 @@ class GSCTradingPokémonInfo:
         old_max_hps = self.get_max_hp()
         old_current_hps = self.get_curr_hp()
         for i in range(6):
-            GSCUtils.write_short(self.values, 0x24 + (i * 2), GSCUtils.stat_calculation(i, self.get_species(), self.get_ivs(), self.get_stat_exp(), self.get_level()))
+            GSCUtilsMisc.write_short(self.values, 0x24 + (i * 2), GSCUtils.stat_calculation(i, self.get_species(), self.get_ivs(), self.get_stat_exp(), self.get_level()))
         new_max_hps = self.get_max_hp()
         old_current_hps += new_max_hps-old_max_hps
-        GSCUtils.write_short(self.values, 0x22, min(old_current_hps, new_max_hps))
+        GSCUtilsMisc.write_short(self.values, 0x22, min(old_current_hps, new_max_hps))
         
     def get_stat_exp(self):
         ret = [0,0,0,0,0]
         for i in range(5):
-            ret[i] = GSCUtils.read_short(self.values, 0xB + (i * 2))
+            ret[i] = GSCUtilsMisc.read_short(self.values, 0xB + (i * 2))
         return ret
 
     def get_ivs(self):
         ret = [0,0,0,0]
-        calc_val = [GSCUtils.read_nybbles(self.values[0x15]), GSCUtils.read_nybbles(self.values[0x16])]
+        calc_val = [GSCUtilsMisc.read_nybbles(self.values[0x15]), GSCUtilsMisc.read_nybbles(self.values[0x16])]
         for i in range(4):
             ret[i] = calc_val[i>>1][i&1]
         return ret
 
     def get_curr_hp(self):
-        return GSCUtils.read_short(self.values, 0x22)
+        return GSCUtilsMisc.read_short(self.values, 0x22)
     
     def get_max_hp(self):
-        return GSCUtils.read_short(self.values, 0x24)
+        return GSCUtilsMisc.read_short(self.values, 0x24)
     
     def has_mail(self):
         return GSCUtils.is_item_mail(self.get_item())
@@ -419,10 +423,10 @@ class GSCTradingPokémonInfo:
         mail_sources = [self.mail, self.mail_sender]
         data = [0] * self._precalced_lengths[len(sources)+len(mail_sources)]
         for i in range(len(sources)):
-            GSCUtils.copy_to_data(data, self._precalced_lengths[i], sources[i].values)
+            GSCUtilsMisc.copy_to_data(data, self._precalced_lengths[i], sources[i].values)
         if self.has_mail():
             for i in range(len(mail_sources)):
-                GSCUtils.copy_to_data(data, self._precalced_lengths[i+len(sources)], mail_sources[i].values)
+                GSCUtilsMisc.copy_to_data(data, self._precalced_lengths[i+len(sources)], mail_sources[i].values)
 
     def set_data(data):
         mon = GSCTradingPokémonInfo(data, self._precalced_lengths[0])
@@ -451,7 +455,7 @@ class GSCTradingData:
     def __init__(self, data_pokemon, data_mail=None):
         self.trader = GSCTradingText(data_pokemon, self.gsc_trader_name_pos)
         self.party_info = GSCTradingPartyInfo(data_pokemon, self.gsc_trading_party_info_pos)
-        self.trader_info = GSCUtils.read_short(data_pokemon, self.gsc_trader_info_pos)
+        self.trader_info = GSCUtilsMisc.read_short(data_pokemon, self.gsc_trader_info_pos)
         self.pokemon = []
         for i in range(self.get_party_size()):
             self.pokemon += [GSCTradingPokémonInfo(data_pokemon, self.gsc_trading_pokemon_pos + i * self.gsc_trading_pokemon_length)]
@@ -535,18 +539,18 @@ class GSCTradingData:
         for i in range(2):
             data += [lengths[i]*[0]]
         data += [GSCUtils.no_mail_section[:len(GSCUtils.no_mail_section)]]
-        GSCUtils.copy_to_data(data[1], self.gsc_trader_name_pos, self.trader.values)
+        GSCUtilsMisc.copy_to_data(data[1], self.gsc_trader_name_pos, self.trader.values)
         data[1][self.gsc_trading_party_info_pos] = self.get_party_size()
-        GSCUtils.copy_to_data(data[1], self.gsc_trading_party_info_pos + 1, self.party_info.actual_mons)
+        GSCUtilsMisc.copy_to_data(data[1], self.gsc_trading_party_info_pos + 1, self.party_info.actual_mons)
         data[1][0x12] = 0xFF
-        GSCUtils.write_short(data[1], self.gsc_trader_info_pos, self.trader_info)
+        GSCUtilsMisc.write_short(data[1], self.gsc_trader_info_pos, self.trader_info)
         for i in range(self.get_party_size()):
-            GSCUtils.copy_to_data(data[1], self.gsc_trading_pokemon_pos + (i * self.gsc_trading_pokemon_length), self.pokemon[i].values)
-            GSCUtils.copy_to_data(data[1], self.gsc_trading_pokemon_ot_pos + (i * self.gsc_trading_name_length), self.pokemon[i].ot_name.values)
-            GSCUtils.copy_to_data(data[1], self.gsc_trading_pokemon_nickname_pos + (i * self.gsc_trading_name_length), self.pokemon[i].nickname.values)
+            GSCUtilsMisc.copy_to_data(data[1], self.gsc_trading_pokemon_pos + (i * self.gsc_trading_pokemon_length), self.pokemon[i].values)
+            GSCUtilsMisc.copy_to_data(data[1], self.gsc_trading_pokemon_ot_pos + (i * self.gsc_trading_name_length), self.pokemon[i].ot_name.values)
+            GSCUtilsMisc.copy_to_data(data[1], self.gsc_trading_pokemon_nickname_pos + (i * self.gsc_trading_name_length), self.pokemon[i].nickname.values)
             if self.pokemon[i].mail is not None:
-                GSCUtils.copy_to_data(data[2], self.gsc_trading_pokemon_mail_pos + (i * self.gsc_trading_mail_length), self.pokemon[i].mail.values)
-                GSCUtils.copy_to_data(data[2], self.gsc_trading_pokemon_mail_sender_pos + (i * self.gsc_trading_mail_sender_length), self.pokemon[i].mail_sender.values)
+                GSCUtilsMisc.copy_to_data(data[2], self.gsc_trading_pokemon_mail_pos + (i * self.gsc_trading_mail_length), self.pokemon[i].mail.values)
+                GSCUtilsMisc.copy_to_data(data[2], self.gsc_trading_pokemon_mail_sender_pos + (i * self.gsc_trading_mail_sender_length), self.pokemon[i].mail_sender.values)
         return data
     
 class GSCChecks:
@@ -562,13 +566,13 @@ class GSCChecks:
     
     def __init__(self, section_sizes, do_sanity_checks):
         self.do_sanity_checks = do_sanity_checks
-        self.bad_ids_items = GSCUtils.prepare_check_list(GSCUtils.read_data(self.bad_ids_items_path))
-        self.bad_ids_moves = GSCUtils.prepare_check_list(GSCUtils.read_data(self.bad_ids_moves_path))
-        self.bad_ids_pokemon = GSCUtils.prepare_check_list(GSCUtils.read_data(self.bad_ids_pokemon_path))
-        self.bad_ids_text = GSCUtils.prepare_check_list(GSCUtils.read_data(self.bad_ids_text_path))
+        self.bad_ids_items = GSCUtilsLoaders.prepare_check_list(GSCUtilsMisc.read_data(self.bad_ids_items_path))
+        self.bad_ids_moves = GSCUtilsLoaders.prepare_check_list(GSCUtilsMisc.read_data(self.bad_ids_moves_path))
+        self.bad_ids_pokemon = GSCUtilsLoaders.prepare_check_list(GSCUtilsMisc.read_data(self.bad_ids_pokemon_path))
+        self.bad_ids_text = GSCUtilsLoaders.prepare_check_list(GSCUtilsMisc.read_data(self.bad_ids_text_path))
         self.check_functions = [self.clean_nothing, self.clean_text, self.clean_team_size, self.clean_species, self.clean_move, self.clean_item, self.clean_level, self.check_hp, self.clean_text_final, self.load_stat_exp, self.load_stat_iv, self.check_stat, self.clean_species_sp, self.clean_pp, self.clean_experience]
-        self.checks_map = self.prepare_checks_map(GSCUtils.read_data(self.checks_map_path), section_sizes)
-        self.single_pokemon_checks_map = self.prepare_basic_checks_map(GSCUtils.read_data(self.single_pokemon_checks_map_path))
+        self.checks_map = self.prepare_checks_map(GSCUtilsMisc.read_data(self.checks_map_path), section_sizes)
+        self.single_pokemon_checks_map = self.prepare_basic_checks_map(GSCUtilsMisc.read_data(self.single_pokemon_checks_map_path))
     
     def clean_check_sanity_checks(func):
         def wrapper(*args, **kwargs):
@@ -596,7 +600,7 @@ class GSCChecks:
         self.curr_species_pos = 0
 
     def prepare_checks_map(self, data, lengths):
-        raw_data_sections = GSCUtils.divide_data(data, lengths)
+        raw_data_sections = GSCUtilsMisc.divide_data(data, lengths)
         call_map = [[],[],[]]
         for i in range(len(raw_data_sections)):
             call_map[i] = self.prepare_basic_checks_map(raw_data_sections[i])
@@ -708,7 +712,7 @@ class GSCChecks:
     
     @clean_check_sanity_checks
     def load_stat_iv(self, val):
-        calc_val = GSCUtils.read_nybbles(val)
+        calc_val = GSCUtilsMisc.read_nybbles(val)
         self.iv[self.curr_iv_pos*2] = calc_val[0]
         self.iv[(self.curr_iv_pos*2) + 1] = calc_val[1]
         self.curr_iv_pos += 1
@@ -778,16 +782,16 @@ class GSCChecks:
     
     @valid_check_sanity_checks
     def is_item_valid(self, item):
-        return not GSCUtils.check_normal_list(self.bad_ids_items, item)
+        return not GSCUtilsMisc.check_normal_list(self.bad_ids_items, item)
     
     @valid_check_sanity_checks
     def is_move_valid(self, move):
-        return not GSCUtils.check_normal_list(self.bad_ids_moves, move)
+        return not GSCUtilsMisc.check_normal_list(self.bad_ids_moves, move)
     
     @valid_check_sanity_checks
     def is_species_valid(self, species):
-        return not GSCUtils.check_normal_list(self.bad_ids_pokemon, species)
+        return not GSCUtilsMisc.check_normal_list(self.bad_ids_pokemon, species)
     
     @valid_check_sanity_checks
     def is_char_valid(self, char):
-        return not GSCUtils.check_normal_list(self.bad_ids_text, char)
+        return not GSCUtilsMisc.check_normal_list(self.bad_ids_text, char)

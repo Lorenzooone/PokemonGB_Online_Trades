@@ -52,7 +52,7 @@ class GSCTradingClient:
             r = Random()
             self.own_id = r.randint(0, GSCTradingClient.max_message_id)
         else:
-            self.own_id = GSCUtils.inc_byte(self.own_id)
+            self.own_id = GSCUtilsMisc.inc_byte(self.own_id)
         self.connection.send_data(dest, [self.own_id, byte])
     
     def get_single_byte(self, dest):
@@ -62,7 +62,7 @@ class GSCTradingClient:
                 self.other_id = ret[0]
             elif self.other_id != ret[0]:
                 return None
-            self.other_id = GSCUtils.inc_byte(self.other_id)
+            self.other_id = GSCUtilsMisc.inc_byte(self.other_id)
             return ret[1]
         return ret
     
@@ -83,9 +83,9 @@ class GSCTradingClient:
         data = self.connection.recv_data(GSCTradingClient.gsc_full_transfer)
         if data is None:
             success = False
-            data = GSCUtils.load_trading_data(self.fileBaseTargetName, lengths)
+            data = GSCUtilsLoaders.load_trading_data(self.fileBaseTargetName, lengths)
         else:
-            data = GSCUtils.divide_data(data, lengths)
+            data = GSCUtilsMisc.divide_data(data, lengths)
         return data, success
 
     def send_big_trading_data(self, data):
@@ -331,8 +331,8 @@ class GSCTrading:
                 if not self.is_choice_decline(received_accepted) and not self.is_choice_decline(accepted):
                     # Apply the trade to the data
                     self.own_pokemon.trade_mon(self.other_pokemon, self.convert_choice(sent_mon), self.convert_choice(received_choice))
-                    self.own_blank_trade = GSCUtils.default_if_none(self.own_pokemon.evolve_mon(self.own_pokemon.get_last_mon_index()), False)
-                    self.other_blank_trade = GSCUtils.default_if_none(self.other_pokemon.evolve_mon(self.other_pokemon.get_last_mon_index()), False)
+                    self.own_blank_trade = GSCUtilsMisc.default_if_none(self.own_pokemon.evolve_mon(self.own_pokemon.get_last_mon_index()), False)
+                    self.other_blank_trade = GSCUtilsMisc.default_if_none(self.other_pokemon.evolve_mon(self.other_pokemon.get_last_mon_index()), False)
 
                     # Conclude the trade successfully
                     next = self.wait_for_input(next)
