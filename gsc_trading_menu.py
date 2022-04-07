@@ -1,3 +1,4 @@
+import threading
 from random import Random
 
 class GSCTradingMenu:
@@ -182,3 +183,52 @@ class GSCTradingMenu:
     def handle_verbose_option(self):
         self.verbose = not self.verbose
         return False
+
+class GSCBufferedNegotiator(threading.Thread):
+
+    def __init__(self, menu, comms, buffered, sleep_func):
+        threading.Thread.__init__(self)
+        self.setDaemon(True)
+        self.comms = comms
+        self.menu = menu
+        self.final_buffered = None
+        self.buffered = buffered
+        self.sleep_func = sleep_func
+    
+    def force_receive(self, fun):
+        received = None
+        while received is None:
+            self.sleep_func()
+            received = fun()
+        return received
+        
+    def choose_if_buffered(self):
+        buffered = self.buffered
+        self.comms.send_buffered_data(buffered)
+        other_buffered = self.force_receive(self.comms.get_buffered_data)
+        if buffered == other_buffered:
+            return buffered
+        change_buffered = None
+        while change_buffered is None:
+            own_val = self.comms.send_negotiation_data()
+            other_val = self.force_receive(self.comms.get_negotiation_data)
+            if other_val > own_val:
+                change_buffered = True
+            elif other_val < own_val:
+                change_buffered = False
+        while buffered != other_buffered:
+            if not change_buffered:
+                other_buffered = self.force_receive(self.comms.get_buffered_data)
+            else:
+                buffered = self.menu.handle_buffered_change_offer(buffered)
+                self.comms.send_buffered_data(buffered)
+            change_buffered = not change_buffered
+        return buffered
+    
+    def get_chosen_buffered(self):
+        return self.final_buffered
+
+    def run(self):
+        self.final_buffered = self.choose_if_buffered()
+        if self.menu.verbose:
+            self.menu.chosen_buffered_print(self.final_buffered)

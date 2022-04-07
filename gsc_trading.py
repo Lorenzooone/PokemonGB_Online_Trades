@@ -1,6 +1,7 @@
 import time
 from random import Random
 from gsc_trading_data_utils import *
+from gsc_trading_menu import GSCBufferedNegotiator
 
 class GSCTradingClient:
     gsc_full_transfer = "FLL"
@@ -329,13 +330,12 @@ class GSCTrading:
     def is_trade_valid(self, own_choice, other_choice):
         return self.check_mon_validity(own_choice, self.own_pokemon) and self.check_mon_validity(other_choice, self.other_pokemon)
     
-    def force_receive(self, fun, send_nothing=True):
+    def force_receive(self, fun):
         received = None
         while received is None:
             self.sleep_func()
             received = fun()
-            if send_nothing:
-                self.swap_byte(self.gsc_no_input)
+            self.swap_byte(self.gsc_no_input)
         return received
 
     def do_trade(self, close=False):
@@ -450,41 +450,20 @@ class GSCTrading:
         self.other_pokemon = GSCTradingData(data_other[1], data_mail=data_other[2])
         return valid
     
-    def choose_if_buffered(self, curr_buffered):
-        buffered = curr_buffered
-        self.comms.send_buffered_data(buffered)
-        other_buffered = self.force_receive(self.comms.get_buffered_data, send_nothing=False)
-        if buffered == other_buffered:
-            return buffered
-        change_buffered = None
-        while change_buffered is None:
-            own_val = self.comms.send_negotiation_data()
-            other_val = self.force_receive(self.comms.get_negotiation_data, send_nothing=False)
-            if other_val > own_val:
-                change_buffered = True
-            elif other_val < own_val:
-                change_buffered = False
-        while buffered != other_buffered:
-            if not change_buffered:
-                other_buffered = self.force_receive(self.comms.get_buffered_data, send_nothing=False)
-            else:
-                buffered = self.menu.handle_buffered_change_offer(buffered)
-                self.comms.send_buffered_data(buffered)
-            change_buffered = not change_buffered
-        return buffered
+    
 
     def player_trade(self, buffered):
         self.own_blank_trade = True
         self.other_blank_trade = True
-        buffered = self.choose_if_buffered(buffered)
-        if self.menu.verbose:
-            self.menu.chosen_buffered_print(buffered)
+        buf_neg = GSCBufferedNegotiator(self.menu, self.comms, buffered, self.sleep_func)
+        buf_neg.start()
         self.enter_room()
         continue_trading = True
         while True:
             if not self.send_predefined_section(self.gsc_start_trading_states, stop_to=1, die_on_no_data=True):
                 break
             if self.own_blank_trade and self.other_blank_trade:
+                buffered = self.force_receive(buf_neg.get_chosen_buffered)
                 if buffered:
                     valid = self.buffered_trade()
                 else:
