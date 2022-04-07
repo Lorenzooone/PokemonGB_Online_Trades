@@ -107,17 +107,19 @@ class GSCTrading:
     gsc_no_input = 0xFE
     gsc_no_data = 0
     gsc_special_sections_len = [0xA, 0x1BC, 0x24C]
+    gsc_drop_bytes_checks = [[0xA, 0x1B9, 0x1E6], [gsc_next_section, gsc_next_section, gsc_no_input]]
     gsc_stop_trade = 0x7F
     gsc_first_trade_index = 0x70
     gsc_decline_trade = 0x71
     gsc_accept_trade = 0x72
     
-    def __init__(self, sending_func, receiving_func, connection, menu):
+    def __init__(self, sending_func, receiving_func, connection, menu, kill_function):
         self.sendByte = sending_func
         self.receiveByte = receiving_func
         self.checks = GSCChecks(self.gsc_special_sections_len, menu.do_sanity_checks)
         self.comms = GSCTradingClient(self, connection)
         self.menu = menu
+        self.kill_function = kill_function
         GSCUtils()
 
     def send_predefined_section(self, states_list, stop_to=0, die_on_no_data=False):
@@ -136,6 +138,27 @@ class GSCTrading:
                 else:
                     consecutive_no_data = 0
         return True
+        
+    def has_transfer_failed(self, byte, byte_index, section_index):
+        if byte_index >= self.gsc_drop_bytes_checks[0][section_index]:
+            if byte_index < self.gsc_special_sections_len[section_index]:
+                if byte == self.gsc_drop_bytes_checks[1][section_index]:
+                    return True
+            else:
+                if byte != self.gsc_drop_bytes_checks[1][section_index]:
+                    return True
+        return False
+    
+    def check_bad_data(self, byte, byte_index, section_index):
+        if self.has_transfer_failed(byte, byte_index, section_index):
+            if self.menu.kill_on_byte_drops:
+                print("Error! At least one byte was not properly transfered!")
+                self.kill_function()
+            elif not self.printed_warning_drop:
+                if self.menu.verbose:
+                    print("Warning! At least one byte was not properly transfered!")
+                self.printed_warning_drop = True
+                    
                 
     def read_section(self, index, send_data, buffered):
         length = self.gsc_special_sections_len[index]
@@ -178,6 +201,7 @@ class GSCTrading:
             self.swap_byte(next)
             other_buf = send_data
         else:
+            self.printed_warning_drop = False
             buf = [next]
             other_buf = []
             send_buf = [[0,next],[0xFFFF,0xFF],[index]]
@@ -197,6 +221,8 @@ class GSCTrading:
                                 send_buf[(i+1)&1][1] = next
                                 buf += [next]
                                 other_buf += [cleaned_byte]
+                                self.check_bad_data(cleaned_byte, i, index)
+                                self.check_bad_data(next, i + 1, index)
                                 found = True
                             elif byte_num == i:
                                 found = True

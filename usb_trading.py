@@ -18,7 +18,7 @@ def transfer_func():
     if menu.verbose:
         print("Waiting for the transfer to start...")
     p2p_conn = P2PConnection(menu, kill_function)
-    trade_c = GSCTrading(sendByte, receiveByte, p2p_conn, menu)
+    trade_c = GSCTrading(sendByte, receiveByte, p2p_conn, menu, kill_function)
     p2p_conn.start()
     res = trade_c.player_trade(menu.buffered) # Read the starting information
     

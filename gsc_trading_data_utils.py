@@ -272,6 +272,7 @@ class GSCUtilsMisc:
         return default_data
     
 class GSCTradingText:
+
     def __init__(self, data, start, length=0xB, data_start=0):
         self.values = data[start:start+length]
         self.start_at = data_start
@@ -570,7 +571,23 @@ class GSCChecks:
         self.bad_ids_moves = GSCUtilsLoaders.prepare_check_list(GSCUtilsMisc.read_data(self.bad_ids_moves_path))
         self.bad_ids_pokemon = GSCUtilsLoaders.prepare_check_list(GSCUtilsMisc.read_data(self.bad_ids_pokemon_path))
         self.bad_ids_text = GSCUtilsLoaders.prepare_check_list(GSCUtilsMisc.read_data(self.bad_ids_text_path))
-        self.check_functions = [self.clean_nothing, self.clean_text, self.clean_team_size, self.clean_species, self.clean_move, self.clean_item, self.clean_level, self.check_hp, self.clean_text_final, self.load_stat_exp, self.load_stat_iv, self.check_stat, self.clean_species_sp, self.clean_pp, self.clean_experience]
+        self.check_functions = [
+            self.clean_nothing,
+            self.clean_text,
+            self.clean_team_size,
+            self.clean_species,
+            self.clean_move,
+            self.clean_item,
+            self.clean_level,
+            self.check_hp,
+            self.clean_text_final,
+            self.load_stat_exp,
+            self.load_stat_iv,
+            self.check_stat,
+            self.clean_species_sp,
+            self.clean_pp,
+            self.clean_experience
+            ]
         self.checks_map = self.prepare_checks_map(GSCUtilsMisc.read_data(self.checks_map_path), section_sizes)
         self.single_pokemon_checks_map = self.prepare_basic_checks_map(GSCUtilsMisc.read_data(self.single_pokemon_checks_map_path))
     

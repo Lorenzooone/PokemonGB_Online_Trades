@@ -6,42 +6,66 @@ class GSCTradingMenu:
     two_player_trade_str = "2P"
     pool_trade_str = "PS"
 
-    def __init__(self, server_host=default_server[0], server_port=default_server[1], buffered=False, is_emulator=False, do_sanity_checks=True, emulator_host=default_emulator[0], emulator_port=default_emulator[1], verbose=True):
+    def __init__(self, server_host=default_server[0], server_port=default_server[1], buffered=False, is_emulator=False, do_sanity_checks=True, kill_on_byte_drops=True, emulator_host=default_emulator[0], emulator_port=default_emulator[1], verbose=True):
         self.server = [server_host, server_port]
         self.buffered = buffered
         self.is_emulator = is_emulator
         self.emulator = [emulator_host, emulator_port]
         self.do_sanity_checks = do_sanity_checks
+        self.kill_on_byte_drops = kill_on_byte_drops
         self.verbose = verbose
         self.trade_type = None
         self.room = self.get_default_room()
-        self.top_menu_handlers = {"0": self.start_2p_trading, "1": self.start_2p_trading, "2": self.start_pool_trading, "3": self.handle_options}
-        self.options_menu_handlers = {"0": self.handle_exit_option, "1": self.handle_server_option, "2": self.handle_port_option, "3": self.handle_buffered_option, "4": self.handle_sanity_option, "5": self.handle_verbose_option}
+        self.top_menu_handlers = {
+            "0": self.start_2p_trading,
+            "1": self.start_2p_trading,
+            "2": self.start_pool_trading,
+            "3": self.handle_options
+            }
+        self.options_menu_handlers = {
+            "0": self.handle_exit_option,
+            "1": self.handle_server_option,
+            "2": self.handle_port_option,
+            "3": self.handle_sanity_option,
+            "4": self.handle_verbose_option,
+            "5": self.handle_buffered_option,
+            "6": self.handle_kill_on_byte_drop_option
+            }
         if is_emulator:
-            self.options_menu_handlers["6"] = self.handle_emulator_host_option
-            self.options_menu_handlers["7"] = self.handle_emulator_port_option
+            self.options_menu_handlers["7"] = self.handle_emulator_host_option
+            self.options_menu_handlers["8"] = self.handle_emulator_port_option
             
     def top_menu_print(self):
+        print("\n=============== Top level Menu ===============")
         print("1) Start 2-Player trade (Default)")
         print("2) Start Pool trade")
         print("3) Options")
     
     def options_menu_print(self):
+        print("\n=============== General Options ===============")
+        print("0) Exit (Default)")
         print("1) Server for connection: " + self.server[0])
         print("2) Port for connection: " + str(self.server[1]))
-        if self.buffered:
-            print("3) Change to Synchronous Trading (Current: Buffered)")
-        else:
-            print("3) Change to Buffered Trading (Current: Synchronous)")
         if self.do_sanity_checks:
-            print("4) Disable Sanity checks (Current: Enabled)")
+            print("3) Disable Sanity checks (Current: Enabled)")
         else:
-            print("4) Enable Sanity checks (Current: Disabled)")
-        print("5) Change Verbosity (Current: " + str(self.verbose) + ")")
+            print("3) Enable Sanity checks (Current: Disabled)")
+        print("4) Change Verbosity (Current: " + str(self.verbose) + ")")
+        
+        print("\n=============== 2-Player trade Options ===============")
+        if self.buffered:
+            print("5) Change to Synchronous Trading (Current: Buffered)")
+        else:
+            print("5) Change to Buffered Trading (Current: Synchronous)")
+        if self.kill_on_byte_drops:
+            print("6) Disable Crash on synchronous byte drop (Current: Enabled)")
+        else:
+            print("6) Enable Crash on synchronous byte drop (Current: Disabled)")
+
         if self.is_emulator:
-            print("6) Host for emulator connection: " + self.emulator[0])
-            print("7) Port for emulator connection: " + str(self.emulator[1]))
-        print("0) Exit (Default)")
+            print("\n=============== Emulator Options ===============")
+            print("7) Host for emulator connection: " + self.emulator[0])
+            print("8) Port for emulator connection: " + str(self.emulator[1]))
 
     def get_int(self, default_value):
         x = input()
@@ -52,7 +76,7 @@ class GSCTradingMenu:
         return ret_val
 
     def choice_print(self):
-        print("Input the action's number: ", end='')
+        print("\nInput the action's number: ", end='')
     
     def change_server_print(self):
         print("Server: ", end='')
@@ -127,6 +151,10 @@ class GSCTradingMenu:
     
     def handle_sanity_option(self):
         self.do_sanity_checks = not self.do_sanity_checks
+        return False
+    
+    def handle_kill_on_byte_drop_option(self):
+        self.kill_on_byte_drops = not self.kill_on_byte_drops
         return False
     
     def handle_verbose_option(self):
