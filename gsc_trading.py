@@ -128,7 +128,6 @@ class GSCTradingClient:
     def get_negotiation_data(self):
         return self.get_single_byte(GSCTradingClient.gsc_negotiation_transfer)
 
-
 class GSCTrading:
     sleep_timer = 0.01
     gsc_enter_room_states = [[0x01, 0xFE, 0x61, 0xD1, 0xFE], [0xFE, 0x61, 0xD1, 0xFE, 0xFE]]
@@ -449,8 +448,6 @@ class GSCTrading:
         self.own_pokemon = GSCTradingData(data[1], data_mail=data[2])
         self.other_pokemon = GSCTradingData(data_other[1], data_mail=data_other[2])
         return valid
-    
-    
 
     def player_trade(self, buffered):
         self.own_blank_trade = True

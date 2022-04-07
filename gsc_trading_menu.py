@@ -46,6 +46,9 @@ class GSCTradingMenu:
         print("\nThe other player wants to do a " + self.get_buffered_str(not buffered) + " trade.\nWould you like to switch to a " + self.get_buffered_str(not buffered) + " trade?")
         print("Choice (y = Yes, n=No): ", end = '')
     
+    def buffered_other_negotiation_print(self, buffered):
+        print("\nAsking the other player whether they're willing to do a " + self.get_buffered_str(buffered) + " trade...")
+    
     def chosen_buffered_print(self, buffered):
         print("\nDecided to do a " + self.get_buffered_str(buffered) + " trade.")
             
@@ -218,6 +221,7 @@ class GSCBufferedNegotiator(threading.Thread):
                 change_buffered = False
         while buffered != other_buffered:
             if not change_buffered:
+                self.menu.buffered_other_negotiation_print(buffered)
                 other_buffered = self.force_receive(self.comms.get_buffered_data)
             else:
                 buffered = self.menu.handle_buffered_change_offer(buffered)
