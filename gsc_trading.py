@@ -93,16 +93,16 @@ class GSCTradingClient:
         
         if ret is not None:
             base_index = self.trader.convert_choice(ret[0])
-            
             if ret[0] != GSCTrading.gsc_stop_trade:
                 if self.trader.checks.do_sanity_checks and base_index >= self.trader.other_pokemon.get_party_size():
                     base_index = self.trader.other_pokemon.get_last_mon_index()
                 
                 actual_data = ret[1:]
                 new_actual_data = ret[1:]
-                if len(new_actual_data) > 0:
-                    for i in range(len(actual_data)):
-                        new_actual_data[i] = self.trader.checks.single_pokemon_checks_map[i](actual_data[i])
+                checker = self.trader.checks.single_pokemon_checks_map
+                if len(new_actual_data) >= len(checker):
+                    for i in range(len(checker)):
+                        new_actual_data[i] = checker[i](actual_data[i])
                     loaded_mon = GSCTradingPokémonInfo.set_data(new_actual_data)
                     unfiltered_mon = GSCTradingPokémonInfo.set_data(actual_data)
                     

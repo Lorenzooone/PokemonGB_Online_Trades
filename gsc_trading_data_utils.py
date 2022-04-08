@@ -318,6 +318,8 @@ class GSCTradingPokémonInfo:
     sender_len = 0xE
     _precalced_lengths = None
     
+    no_moves_equality_ranges = [range(0,2), range(6,0x17), range(0x1B, pokemon_data_len)]
+    no_moves_equality_weak_ranges = [range(0,2), range(6,0x17), range(0x1B, 0x20), range(0x24, pokemon_data_len)]
     all_lengths = [pokemon_data_len, ot_name_len, nickname_len, mail_len, sender_len]
 
     def __init__(self, data, start, length=pokemon_data_len):
@@ -360,11 +362,16 @@ class GSCTradingPokémonInfo:
     def set_item(self, data=0):
         self.values[1] = data & 0xFF
     
-    def has_move(self, move):
-        for i in range(4):
+    def has_move_index(self, move, start=0):
+        for i in range(start,4):
             if self.get_move(i) == move:
-                return True
-        return False
+                return i
+        return 4
+    
+    def has_move(self, move):
+        if self.has_move_index(move) == 4:
+            return False
+        return True
     
     def free_move_slots(self):
         free_slots = []
@@ -421,10 +428,16 @@ class GSCTradingPokémonInfo:
     def has_mail(self):
         return GSCUtils.is_item_mail(self.get_item())
     
-    def is_equal(self, other):
-        for i in range(len(self.values)):
-            if self.values[i] != other.values[i]:
-                return False
+    def is_equal(self, other, weak=False):
+        ranges = GSCTradingPokémonInfo.no_moves_equality_ranges
+        if weak:
+            ranges = GSCTradingPokémonInfo.no_moves_equality_weak_ranges
+        for i in ranges:
+            for j in i:
+                if self.values[j] != other.values[j]:
+                    return False
+        if not self.are_moves_and_pp_same(other):
+            return False
         if not (self.ot_name.values_equal(other.ot_name.values) and self.nickname.values_equal(other.nickname.values)):
             return False
         if self.has_mail():
@@ -432,12 +445,53 @@ class GSCTradingPokémonInfo:
                 return False
         return True
     
+    def get_same_moves(self):
+        pos = []
+        for i in range(4):
+            inner_pos = []
+            for j in range(4):
+                if self.get_move(i) == self.get_move(j):
+                    inner_pos += [i]
+            pos += [inner_pos]
+        return pos
+        
+    def are_moves_and_pp_same(self, other):
+        corresponding_indexes = self.are_moves_same(other)
+        if corresponding_indexes is None:
+            return False
+        possible_positions = self.get_same_moves()
+        found_pos = []
+        for i in range(4):
+            found = False
+            for j in possible_positions[i]:
+                if not found and corresponding_indexes[j] not in found_pos and self.get_pp(i) == other.get_pp(corresponding_indexes[j]):
+                    found_pos += [corresponding_indexes[j]]
+                    found = True
+            if not found:
+                return False
+        return True
+    
+    def are_moves_same(self, other):
+        pos = []
+        for i in range(4):
+            proper_found = False
+            start_index = 0
+            while not proper_found:
+                index = other.has_move_index(self.get_move(i), start=start_index)
+                if index == 4:
+                    return None
+                elif index in pos:
+                    start_index = index + 1
+                else:
+                    pos += [index]
+                    proper_found = True
+        return pos
+    
     def has_changed_significantly(self, raw):
         if self.get_species() != raw.get_species():
             return True
-        for i in range(4):
-            if not raw.has_move(self.get_move(i)):
-                return True
+        if self.are_moves_same(raw) is None:
+            return True
         if self.get_level() != raw.get_level():
             return True
         return False
@@ -509,6 +563,9 @@ class GSCTradingData:
     def search_for_mon(self, mon):
         for i in range(self.get_party_size()):
             if mon.is_equal(self.pokemon[i]):
+                return i
+        for i in range(self.get_party_size()):
+            if mon.is_equal(self.pokemon[i], weak=True):
                 return i
         return None
 

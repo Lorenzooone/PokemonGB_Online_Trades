@@ -8,7 +8,8 @@ class P2PConnection (threading.Thread):
     PACKET_SIZE_BYTES = 2048
     SLEEP_TIMER = 0.01
     REQ_INFO_POSITION = 0
-    DATA_POSITION = 4
+    LEN_POSITION = 4
+    DATA_POSITION = 6
     send_request = "S"
     get_request = "G"
 
@@ -26,7 +27,7 @@ class P2PConnection (threading.Thread):
         self.ws = WebsocketClient(menu.server[0], menu.server[1], kill_function)
     
     def prepare_send_data(self, type, data):
-        return bytearray(list((P2PConnection.send_request + type).encode()) + data)
+        return bytearray(list((P2PConnection.send_request + type).encode()) + [(len(data) >> 8) & 0xFF, len(data) & 0xFF] + data)
     
     def prepare_get_data(self, type):
         return bytearray(list((P2PConnection.get_request + type).encode()))
@@ -117,7 +118,8 @@ class P2PConnection (threading.Thread):
                     req_kind = req_info[0]
                     req_type = req_info[1:4]
                     if req_kind == P2PConnection.send_request:
-                        self.recv_dict[req_type] = list(data[P2PConnection.DATA_POSITION:])
+                        data_len = (data[P2PConnection.LEN_POSITION] << 8) + data[P2PConnection.LEN_POSITION+1]
+                        self.recv_dict[req_type] = list(data[P2PConnection.DATA_POSITION:P2PConnection.DATA_POSITION+data_len])
                     elif req_kind == P2PConnection.get_request:
                         if req_type in self.send_dict.keys():
                             connection.send(self.prepare_send_data(req_type, self.send_dict[req_type]))
