@@ -53,15 +53,15 @@ class GSCTradingClient:
             val[4+i] = self.trader.own_pokemon.pokemon[self.trader.own_pokemon.get_last_mon_index()].get_pp(i)
         self.connection.send_data(GSCTradingClient.gsc_moves_transfer, val)
     
-    def send_single_byte(self, dest, byte):
+    def send_with_counter(self, dest, data):
         if self.own_id is None:
             r = Random()
             self.own_id = r.randint(0, GSCTradingClient.max_message_id)
         else:
             self.own_id = GSCUtilsMisc.inc_byte(self.own_id)
-        self.connection.send_data(dest, [self.own_id, byte])
+        self.connection.send_data(dest, [self.own_id] + data)
     
-    def get_single_byte(self, dest):
+    def get_with_counter(self, dest):
         ret = self.connection.recv_data(dest)
         if ret is not None:
             if self.other_id is None:
@@ -69,9 +69,18 @@ class GSCTradingClient:
             elif self.other_id != ret[0]:
                 return None
             self.other_id = GSCUtilsMisc.inc_byte(self.other_id)
-            return ret[1]
+            return ret[1:]
         return ret
     
+    def get_single_byte(self, dest):
+        ret = self.get_with_counter(dest)
+        if ret is not None:
+            return ret[0]
+        return ret
+    
+    def send_single_byte(self, dest, byte):
+        self.send_with_counter(dest, [byte])
+
     def get_accepted(self):
         return self.get_single_byte(GSCTradingClient.gsc_accept_transfer)
                 
@@ -79,10 +88,48 @@ class GSCTradingClient:
         self.send_single_byte(GSCTradingClient.gsc_accept_transfer, choice)
                 
     def get_chosen_mon(self):
-        return self.get_single_byte(GSCTradingClient.gsc_choice_transfer)
+        valid = True
+        ret = self.get_with_counter(GSCTradingClient.gsc_choice_transfer)
+        
+        if ret is not None:
+            base_index = self.trader.convert_choice(ret[0])
+            
+            if ret[0] != GSCTrading.gsc_stop_trade:
+                if self.trader.checks.do_sanity_checks and base_index >= self.trader.other_pokemon.get_party_size():
+                    base_index = self.trader.other_pokemon.get_last_mon_index()
+                
+                actual_data = ret[1:]
+                new_actual_data = ret[1:]
+                if len(new_actual_data) > 0:
+                    for i in range(len(actual_data)):
+                        new_actual_data[i] = self.trader.checks.single_pokemon_checks_map[i](actual_data[i])
+                    loaded_mon = GSCTradingPokémonInfo.set_data(new_actual_data)
+                    unfiltered_mon = GSCTradingPokémonInfo.set_data(actual_data)
+                    
+                    found_index = self.trader.other_pokemon.search_for_mon(loaded_mon)
+                    if found_index is None:
+                        found_index = base_index
+                        if self.trader.checks.do_sanity_checks:
+                            valid = False
+                    elif self.trader.checks.do_sanity_checks and loaded_mon.has_changed_significantly(unfiltered_mon):
+                        valid = False
+                else:
+                    found_index = base_index
+                    if self.trader.checks.do_sanity_checks:
+                        valid = False
+
+                ret = [self.trader.convert_index(found_index), valid]
+            else:
+                ret = [ret[0], True]
+        return ret
         
     def send_chosen_mon(self, choice):
-        self.send_single_byte(GSCTradingClient.gsc_choice_transfer, choice)
+        index = self.trader.convert_choice(choice)
+        own_mon = []
+        if choice != GSCTrading.gsc_stop_trade:
+            if index < self.trader.own_pokemon.get_party_size():
+                own_mon = self.trader.own_pokemon.pokemon[index].get_data()
+        self.send_with_counter(GSCTradingClient.gsc_choice_transfer, [choice] + own_mon)
         
     def get_big_trading_data(self, lengths):
         success = True
@@ -313,6 +360,9 @@ class GSCTrading:
     
     def convert_choice(self, choice):
         return choice - self.gsc_first_trade_index
+    
+    def convert_index(self, index):
+        return index + self.gsc_first_trade_index
 
     def is_choice_stop(self, choice):
         if choice == self.gsc_stop_trade:
@@ -350,7 +400,9 @@ class GSCTrading:
                 self.comms.send_chosen_mon(sent_mon)
             
                 # Get the other player's choice
-                received_choice = self.force_receive(self.comms.get_chosen_mon)
+                received_data = self.force_receive(self.comms.get_chosen_mon)
+                received_choice = received_data[0]
+                received_valid = received_data[1]
             else:
                 received_choice = self.gsc_stop_trade
 
@@ -364,7 +416,7 @@ class GSCTrading:
                 accepted = self.wait_for_input(next)
                 
                 # Check validity of trade (if IDs don't match, the game will refuse the trade automatically)
-                valid_trade = self.is_trade_valid(sent_mon, received_choice)
+                valid_trade = self.is_trade_valid(sent_mon, received_choice) and received_valid
                 if not valid_trade:
                     accepted = self.gsc_decline_trade
 

@@ -316,6 +316,7 @@ class GSCTradingPokémonInfo:
     nickname_len = 0xB
     mail_len = 0x21
     sender_len = 0xE
+    _precalced_lengths = None
     
     all_lengths = [pokemon_data_len, ot_name_len, nickname_len, mail_len, sender_len]
 
@@ -323,7 +324,8 @@ class GSCTradingPokémonInfo:
         self.values = data[start:start+length]
         self.mail = None
         self.mail_sender = None
-        self._precalced_lengths = GSCUtilsMisc.calc_divide_lengths(GSCTradingPokémonInfo.all_lengths)
+        if GSCTradingPokémonInfo._precalced_lengths is None:
+            GSCTradingPokémonInfo._precalced_lengths = GSCUtilsMisc.calc_divide_lengths(GSCTradingPokémonInfo.all_lengths)
 
     def add_ot_name(self, data, start):
         self.ot_name = GSCTradingText(data, start, length=GSCTradingPokémonInfo.ot_name_len)
@@ -418,24 +420,46 @@ class GSCTradingPokémonInfo:
     
     def has_mail(self):
         return GSCUtils.is_item_mail(self.get_item())
+    
+    def is_equal(self, other):
+        for i in range(len(self.values)):
+            if self.values[i] != other.values[i]:
+                return False
+        if not (self.ot_name.values_equal(other.ot_name.values) and self.nickname.values_equal(other.nickname.values)):
+            return False
+        if self.has_mail():
+            if not (self.mail.values_equal(other.mail.values) and self.mail_sender.values_equal(other.mail_sender.values)):
+                return False
+        return True
+    
+    def has_changed_significantly(self, raw):
+        if self.get_species() != raw.get_species():
+            return True
+        for i in range(4):
+            if not raw.has_move(self.get_move(i)):
+                return True
+        if self.get_level() != raw.get_level():
+            return True
+        return False
 
     def get_data(self):
         sources = [self, self.ot_name, self.nickname]
         mail_sources = [self.mail, self.mail_sender]
-        data = [0] * self._precalced_lengths[len(sources)+len(mail_sources)]
+        data = [0] * GSCTradingPokémonInfo._precalced_lengths[len(sources)+len(mail_sources)]
         for i in range(len(sources)):
-            GSCUtilsMisc.copy_to_data(data, self._precalced_lengths[i], sources[i].values)
+            GSCUtilsMisc.copy_to_data(data, GSCTradingPokémonInfo._precalced_lengths[i], sources[i].values)
         if self.has_mail():
             for i in range(len(mail_sources)):
-                GSCUtilsMisc.copy_to_data(data, self._precalced_lengths[i+len(sources)], mail_sources[i].values)
+                GSCUtilsMisc.copy_to_data(data, GSCTradingPokémonInfo._precalced_lengths[i+len(sources)], mail_sources[i].values)
+        return data
 
     def set_data(data):
-        mon = GSCTradingPokémonInfo(data, self._precalced_lengths[0])
-        mon.add_ot_name(data, self._precalced_lengths[1])
-        mon.add_nickname(data, self._precalced_lengths[2])
+        mon = GSCTradingPokémonInfo(data, GSCTradingPokémonInfo._precalced_lengths[0])
+        mon.add_ot_name(data, GSCTradingPokémonInfo._precalced_lengths[1])
+        mon.add_nickname(data, GSCTradingPokémonInfo._precalced_lengths[2])
         if mon.has_mail():
-            mon.add_mail(data, self._precalced_lengths[3])
-            mon.add_mail_sender(data, self._precalced_lengths[4])
+            mon.add_mail(data, GSCTradingPokémonInfo._precalced_lengths[3])
+            mon.add_mail_sender(data, GSCTradingPokémonInfo._precalced_lengths[4])
         return mon
 
 class GSCTradingData:
@@ -481,6 +505,12 @@ class GSCTradingData:
     
     def get_last_mon_index(self):
         return self.get_party_size()-1
+    
+    def search_for_mon(self, mon):
+        for i in range(self.get_party_size()):
+            if mon.is_equal(self.pokemon[i]):
+                return i
+        return None
 
     @check_pos_validity
     def mon_has_mail(self, pos):
