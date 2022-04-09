@@ -3,8 +3,12 @@ import threading
 import select
 from websocket_client import WebsocketClient
 from time import sleep
+from gsc_trading_strings import GSCTradingStrings
 
 class P2PConnection (threading.Thread):
+    """
+    Class which handles sending/receiving from another client.
+    """
     PACKET_SIZE_BYTES = 2048
     SLEEP_TIMER = 0.01
     REQ_INFO_POSITION = 0
@@ -43,12 +47,19 @@ class P2PConnection (threading.Thread):
         self.reset_dict(type, self.send_dict)
     
     def send_data(self, type, data):
+        """
+        Sends the data to the other client and prepares the dict's entry
+        for responding to GETs.
+        """
         self.send_dict[type] = data
         self.to_send = self.prepare_send_data(type, data)
         while self.to_send is not None:
             sleep(P2PConnection.SLEEP_TIMER)
     
     def recv_data(self, type, reset=True):
+        """
+        Checks if the data has been received. If not, it issues a GET.
+        """
         if not type in self.recv_dict.keys():
             self.to_send = self.prepare_get_data(type)
             while self.to_send is not None:
@@ -60,19 +71,23 @@ class P2PConnection (threading.Thread):
             return self.recv_dict[type]
 
     def run(self):
+        """
+        Does the initial connection, gets the peer's role (client or server)
+        and then executes socket_conn for handling the rest.
+        """
         is_client = False
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         
             try:
                 s.bind((self.host, self.port))
             except Exception as e:
-                print('Socket error:', str(e))
+                print(GSCTradingStrings.socket_error_str, str(e))
                 self.kill_function()
                 
             s.listen(1)
             real_port = int(s.getsockname()[1])
             if self.verbose:
-                print(f'Listening on {self.host}:{real_port}...')
+                print(GSCTradingStrings.p2p_listening_str.format(host=self.host, port=real_port))
                 
             response = self.ws.get_peer(self.host, real_port, self.room)
             if response.startswith("SERVER"):
@@ -86,7 +101,7 @@ class P2PConnection (threading.Thread):
                 #Get client's connection
                 connection, client_addr = s.accept()
                 if self.verbose:
-                    print(f'Received connection from {client_addr[0]}:{client_addr[1]}')
+                    print(GSCTradingStrings.p2p_server_str.format(host=client_addr[0], port=client_addr[1]))
 
                 with connection:
                     self.socket_conn(connection)
@@ -94,13 +109,34 @@ class P2PConnection (threading.Thread):
                 is_client = True
         
         if not is_server:            
+            #Connect to the other client
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
                 if self.verbose:
-                    print(f'Connecting to {other_host}:{other_port}...')
+                    print(GSCTradingStrings.p2p_client_str.format(host=other_host, port=other_port))
                 s.connect((other_host, other_port))
                 self.socket_conn(s)
     
+    def process_received_data(self, data, connection):
+        """
+        Processes the received data. If it's a send, it stores
+        it inside of the received dict.
+        If it's a get, it sends the requested data, if present
+        inside the send dict.
+        """
+        req_info = data[P2PConnection.REQ_INFO_POSITION:P2PConnection.REQ_INFO_POSITION+4].decode()
+        req_kind = req_info[0]
+        req_type = req_info[1:4]
+        if req_kind == P2PConnection.send_request:
+            data_len = (data[P2PConnection.LEN_POSITION] << 8) + data[P2PConnection.LEN_POSITION+1]
+            self.recv_dict[req_type] = list(data[P2PConnection.DATA_POSITION:P2PConnection.DATA_POSITION+data_len])
+        elif req_kind == P2PConnection.get_request:
+            if req_type in self.send_dict.keys():
+                connection.send(self.prepare_send_data(req_type, self.send_dict[req_type]))
+    
     def socket_conn(self, connection):
+        """
+        Handles both reading the received data and sending.
+        """
         try:
             while True:
                 ready_to_read, ready_to_write, in_error = \
@@ -112,22 +148,14 @@ class P2PConnection (threading.Thread):
                 if len(ready_to_read) > 0:
                     data = connection.recv(self.PACKET_SIZE_BYTES)
                     if not data:
-                        print('Connection dropped')
+                        print(GSCTradingStrings.connection_dropped_str)
                         break
-                    req_info = data[P2PConnection.REQ_INFO_POSITION:P2PConnection.REQ_INFO_POSITION+4].decode()
-                    req_kind = req_info[0]
-                    req_type = req_info[1:4]
-                    if req_kind == P2PConnection.send_request:
-                        data_len = (data[P2PConnection.LEN_POSITION] << 8) + data[P2PConnection.LEN_POSITION+1]
-                        self.recv_dict[req_type] = list(data[P2PConnection.DATA_POSITION:P2PConnection.DATA_POSITION+data_len])
-                    elif req_kind == P2PConnection.get_request:
-                        if req_type in self.send_dict.keys():
-                            connection.send(self.prepare_send_data(req_type, self.send_dict[req_type]))
+                    self.process_received_data(data, connection)
                 if len(ready_to_write) > 0 and self.to_send is not None:
                     connection.send(self.to_send)
                     self.to_send = None
                 sleep(P2PConnection.SLEEP_TIMER)
                 
         except Exception as e:
-            print('Socket error:', str(e))
+            print(GSCTradingStrings.socket_error_str, str(e))
             self.kill_function()

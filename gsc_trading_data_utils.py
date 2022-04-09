@@ -1,6 +1,11 @@
 import math
+from gsc_trading_strings import GSCTradingStrings
 
 class GSCUtilsLoaders:
+    """
+    Class which contains methods used to load structures from
+    binary or text files.
+    """
 
     def prepare_dict(target):
         lines = GSCUtilsLoaders.read_text_file(target)
@@ -58,7 +63,7 @@ class GSCUtilsLoaders:
                 if letter in text_conv_dict:
                     byte_names[i][j] = text_conv_dict[letter]
                 else:
-                    print("UNRECOGNIZED CHARACTER: " + letter)
+                    print(GSCTradingStrings.unrecognized_character_str.format(letter=letter))
         return byte_names
 
     def prepare_check_list(data):
@@ -95,6 +100,10 @@ class GSCUtilsLoaders:
         return data
 
 class GSCUtils:
+    """
+    Class which contains generic methods and data used for
+    pokémon-related functions.
+    """
     evolution_ids_path = "useful_data/evolution_ids.bin"
     mail_ids_path = "useful_data/ids_mail.bin"
     no_mail_path = "useful_data/no_mail_section.bin"
@@ -215,6 +224,10 @@ class GSCUtils:
         return GSCUtils.evolution_ids[species][1]
 
 class GSCUtilsMisc:
+    """
+    Class which contains generic methods and data used for
+    general functions.
+    """
 
     def read_data(target):
         data = None
@@ -272,12 +285,18 @@ class GSCUtilsMisc:
         return default_data
     
 class GSCTradingText:
+    """
+    Class which contains a text entry from the trading data.
+    """
 
     def __init__(self, data, start, length=0xB, data_start=0):
         self.values = data[start:start+length]
         self.start_at = data_start
     
     def values_equal(self, other):
+        """
+        :param other: Bytes, to be compared to the ones from its own values.
+        """
         for i in range(len(self.values)):
             if self.values[i] == GSCUtils.end_of_line and (i >= len(other) or other[i] == GSCUtils.end_of_line):
                 return True
@@ -290,6 +309,10 @@ class GSCTradingText:
         return False
     
 class GSCTradingPartyInfo:
+    """
+    Class which contains information about the party size and species
+    from the trading data.
+    """
     gsc_max_party_mons = 6
     
     def __init__(self, data, start):
@@ -311,6 +334,9 @@ class GSCTradingPartyInfo:
         return self.total
 
 class GSCTradingPokémonInfo:
+    """
+    Class which contains information about the pokémon from the trading data.
+    """
     pokemon_data_len = 0x30
     ot_name_len = 0xB
     nickname_len = 0xB
@@ -348,6 +374,9 @@ class GSCTradingPokémonInfo:
         return self.values[0]
     
     def learnable_moves(self):
+        """
+        Returns the moves the pokémon could learn at its current level.
+        """
         if self.get_species() in GSCUtils.learnsets.keys():
             if self.get_level() in GSCUtils.learnsets[self.get_species()].keys():
                 return GSCUtils.learnsets[self.get_species()][self.get_level()]
@@ -398,6 +427,9 @@ class GSCTradingPokémonInfo:
         return self.values[0x1F]
     
     def update_stats(self):
+        """
+        Updates the stats after they're changed (from evolving).
+        """
         old_max_hps = self.get_max_hp()
         old_current_hps = self.get_curr_hp()
         for i in range(6):
@@ -446,6 +478,9 @@ class GSCTradingPokémonInfo:
         return True
     
     def get_same_moves(self):
+        """
+        Returns for each index the list of indexes with the same move.
+        """
         pos = []
         for i in range(4):
             inner_pos = []
@@ -472,6 +507,10 @@ class GSCTradingPokémonInfo:
         return True
     
     def are_moves_same(self, other):
+        """
+        Returns None if the moves are different.
+        If they're the same, it returns the index in which they're found.
+        """
         pos = []
         for i in range(4):
             proper_found = False
@@ -488,6 +527,10 @@ class GSCTradingPokémonInfo:
         return pos
     
     def has_changed_significantly(self, raw):
+        """
+        Returns whether a pokémon has changed too much due to the sanity
+        checks cleaning it.
+        """
         if self.get_species() != raw.get_species():
             return True
         if self.are_moves_same(raw) is None:
@@ -497,6 +540,9 @@ class GSCTradingPokémonInfo:
         return False
 
     def get_data(self):
+        """
+        Returns all the data used to represent this pokemon.
+        """
         sources = [self, self.ot_name, self.nickname]
         mail_sources = [self.mail, self.mail_sender]
         data = [0] * GSCTradingPokémonInfo._precalced_lengths[len(sources)+len(mail_sources)]
@@ -508,6 +554,9 @@ class GSCTradingPokémonInfo:
         return data
 
     def set_data(data):
+        """
+        Creates an entry from the given data.
+        """
         mon = GSCTradingPokémonInfo(data, GSCTradingPokémonInfo._precalced_lengths[0])
         mon.add_ot_name(data, GSCTradingPokémonInfo._precalced_lengths[1])
         mon.add_nickname(data, GSCTradingPokémonInfo._precalced_lengths[2])
@@ -517,6 +566,9 @@ class GSCTradingPokémonInfo:
         return mon
 
 class GSCTradingData:
+    """
+    Class which contains all the informations about a trader's party.
+    """
     gsc_trader_name_pos = 0
     gsc_trading_party_info_pos = 0xB
     gsc_trader_info_pos = 0x13
@@ -549,7 +601,7 @@ class GSCTradingData:
             self = args[0]
             pos = args[1]
             if pos < 0 or pos >= self.get_party_size():
-                print("Index error!")
+                print(GSCTradingStrings.index_error_str)
                 return False
             return func(*args, **kwargs)
         return wrapper
@@ -561,6 +613,10 @@ class GSCTradingData:
         return self.get_party_size()-1
     
     def search_for_mon(self, mon):
+        """
+        Returns None if a provided pokémon is not in the party.
+        Otherwise, it returns their index.
+        """
         for i in range(self.get_party_size()):
             if mon.is_equal(self.pokemon[i]):
                 return i
@@ -581,6 +637,12 @@ class GSCTradingData:
         
     @check_pos_validity
     def evolve_mon(self, pos):
+        """
+        Handles evolving a pokémon in the party.
+        Returns None if it won't evolve.
+        Returns True if it evolved and player input is required.
+        Returns False if it evolved and no player input is required.
+        """
         evolution = GSCUtils.get_evolution(self.pokemon[pos].get_species(), self.pokemon[pos].get_item())
         if evolution is None:
             return None
@@ -604,6 +666,9 @@ class GSCTradingData:
         return False
     
     def trade_mon(self, other, own_index, other_index):
+        """
+        Trades a pokémon between two parties.
+        """
         self.reorder_party(own_index)
         other.reorder_party(other_index)
         own = self.pokemon[self.get_last_mon_index()]
@@ -614,6 +679,9 @@ class GSCTradingData:
     
     @check_pos_validity
     def reorder_party(self, traded_pos):
+        """
+        Moves a pokémon at the end of the party.
+        """
         pa_info = self.party_info.get_id(traded_pos)
         po_data = self.pokemon[traded_pos]
         for i in range(traded_pos+1,self.get_party_size()):
@@ -623,6 +691,9 @@ class GSCTradingData:
         self.pokemon[self.get_last_mon_index()] = po_data
 
     def create_trading_data(self, lengths):
+        """
+        Creates the data which can be loaded to the hardware.
+        """
         data = []
         for i in range(2):
             data += [lengths[i]*[0]]
@@ -642,6 +713,11 @@ class GSCTradingData:
         return data
     
 class GSCChecks:
+    """
+    Class which handles sanity checks and cleaning of the received data.
+    checks_map and single_pokemon_checks_map are its product used to apply
+    the checks.
+    """
     bad_ids_items_path = "useful_data/bad_ids_items.bin"
     bad_ids_moves_path = "useful_data/bad_ids_moves.bin"
     bad_ids_pokemon_path = "useful_data/bad_ids_pokemon.bin"

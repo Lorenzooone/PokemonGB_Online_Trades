@@ -4,6 +4,7 @@ import select
 import timeit
 import threading
 from time import sleep
+from gsc_trading_strings import GSCTradingStrings
 
 # Implements the BGB link cable protocol
 # See https://bgb.bircd.org/bgblink.html
@@ -26,7 +27,7 @@ class BGBLinkCableSender(threading.Thread):
                 sleep(BGBLinkCableSender.SLEEP_TIMER)
                         
             except Exception as e:
-                print('Socket error:', str(e))
+                print(GSCTradingStrings.socket_error_str, str(e))
                 self._server.kill_function()
         
 
@@ -72,16 +73,16 @@ class BGBLinkCableServer(threading.Thread):
             try:
                 server.bind((self.host, self.port))
             except Exception as e:
-                print('Socket error:', str(e))
+                print(GSCTradingStrings.socket_error_str, str(e))
                 self.kill_function()
                     
             server.listen(1)  # One Game Boy to rule them all
             if self.verbose:
-                print(f'Listening for bgb on {self.host}:{self.port}...')
+                print(GSCTradingStrings.bgb_listening_str.format(host=self.host, port=self.port))
 
             connection, client_addr = server.accept()
             if self.verbose:
-                print(f'Received connection from {client_addr[0]}:{client_addr[1]}')
+                print(GSCTradingStrings.bgb_server_str.format(host=client_addr[0], port=client_addr[1]))
 
             with connection:
                 try:
@@ -102,12 +103,11 @@ class BGBLinkCableServer(threading.Thread):
                     while True:
                         data = connection.recv(self.PACKET_SIZE_BYTES)
                         if not data:
-                            print('Connection dropped')
+                            print(GSCTradingStrings.connection_dropped_str)
                             self.kill_function()
                             break
 
                         b1, b2, b3, b4, timestamp = struct.unpack(self.PACKET_FORMAT, data)
-                        #print(str(b1) + ": " + str(self._last_received_timestamp))
                         if timestamp != 0:
                             self._last_received_timestamp = timestamp
                             self._last_base_timestamp = self.get_curr_timestamp()
@@ -121,7 +121,7 @@ class BGBLinkCableServer(threading.Thread):
                             connection.send(response)
                         
                 except Exception as e:
-                    print('Socket error:', str(e))
+                    print(GSCTradingStrings.socket_error_str, str(e))
                     self.kill_function()
 
     def _handle_version(self, major, minor, patch):

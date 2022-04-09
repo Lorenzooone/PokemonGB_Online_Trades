@@ -12,6 +12,9 @@ import ipaddress
 link_rooms = {}
 
 class WebsocketServer (threading.Thread):
+    '''
+    Class which handles responding to the websocket requests.
+    '''
     
     def __init__(self, host="localhost", port=11111):
         threading.Thread.__init__(self)
@@ -19,9 +22,13 @@ class WebsocketServer (threading.Thread):
         self.host = host
         self.port = port
 
-# create handler for each connection
-
     async def link_function(websocket, data, path):
+        '''
+        Handler which either registers a client to a room, or links
+        two clients together.
+        Decides which one is the client and which one is the server in the
+        P2P connection randomly.
+        '''
         room = 100000
         if len(path) >= 11:
             room = int(path[6:11])
@@ -49,6 +56,10 @@ class WebsocketServer (threading.Thread):
         return room
 
     async def handler(websocket, path):
+        """
+        Gets the data and then calls the proper handler while keeping
+        the connection active.
+        """
         curr_room = 100000
         while True:
             try:
@@ -67,14 +78,15 @@ class WebsocketServer (threading.Thread):
                 curr_room = await WebsocketServer.link_function(websocket, data, path)
 
     def run(self):
+        """
+        Runs the server in a second Thread in order to keep
+        the program responsive.
+        """
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         start_server = websockets.serve(WebsocketServer.handler, self.host, self.port)
         asyncio.get_event_loop().run_until_complete(start_server)
         asyncio.get_event_loop().run_forever()
-
-ws = WebsocketServer()
-ws.start()
 
 def exit_gracefully():
     os._exit(1)
@@ -82,6 +94,9 @@ def exit_gracefully():
 def signal_handler(sig, frame):
     print('You pressed Ctrl+C!')
     exit_gracefully()
+
+ws = WebsocketServer()
+ws.start()
 
 signal.signal(signal.SIGINT, signal_handler)
 

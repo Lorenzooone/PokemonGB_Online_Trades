@@ -8,6 +8,7 @@ import os
 from gsc_trading import GSCTrading
 from p2p_connection import P2PConnection
 from gsc_trading_menu import GSCTradingMenu
+from gsc_trading_strings import GSCTradingStrings
 
 dev = None
 
@@ -16,7 +17,7 @@ def transfer_func():
     menu.handle_menu()
     
     if menu.verbose:
-        print("Waiting for the transfer to start...")
+        print(GSCTradingStrings.waiting_transfer_start_str)
     p2p_conn = P2PConnection(menu, kill_function)
     trade_c = GSCTrading(sendByte, receiveByte, p2p_conn, menu, kill_function)
     p2p_conn.start()
@@ -26,13 +27,11 @@ def transfer_func():
 
 # Code dependant on this connection method
 def sendByte(byte_to_send):
-    #print("send: 0x%02x" % byte_to_send)
     epOut.write(byte_to_send.to_bytes(1, byteorder='big'))
     return
 
 def receiveByte():
     recv = int.from_bytes(epIn.read(epIn.wMaxPacketSize, 100), byteorder='big')
-    #print("recv: 0x%02x" % recv)
     return recv
 
 def kill_function():
@@ -48,7 +47,7 @@ def exit_gracefully():
     os._exit(1)
 
 def signal_handler(sig, frame):
-    print('You pressed Ctrl+C!')
+    print(GSCTradingStrings.crtlc_str)
     exit_gracefully()
 
 signal.signal(signal.SIGINT, signal_handler)

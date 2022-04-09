@@ -6,6 +6,7 @@ from p2p_connection import P2PConnection
 from time import sleep
 from gsc_trading import GSCTrading
 from gsc_trading_menu import GSCTradingMenu
+from gsc_trading_strings import GSCTradingStrings
 
 class PokeTrader:
     SLEEP_TIMER = 0.001
@@ -43,14 +44,14 @@ def exit_gracefully():
     os._exit(1)
 
 def signal_handler(sig, frame):
-    print('You pressed Ctrl+C!')
+    print(GSCTradingStrings.crtlc_str)
     exit_gracefully()
 
 signal.signal(signal.SIGINT, signal_handler)
 
 def transfer_func(p, menu):
     if menu.verbose:
-        print("Waiting for the transfer to start...")
+        print(GSCTradingStrings.waiting_transfer_start_str)
     
     trade_c = GSCTrading(p.sendByte, p.receiveByte, p._p2p_conn, menu, kill_function)
     res = trade_c.player_trade(menu.buffered) # Read the starting information
