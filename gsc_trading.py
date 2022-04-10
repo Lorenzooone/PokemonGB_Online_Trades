@@ -25,9 +25,12 @@ class GSCTradingClient:
     max_message_id = 255
     max_negotiation_id = 255
     
-    def __init__(self, trader, connection, base_no_trade = "useful_data/base.bin"):
+    def __init__(self, trader, connection, verbose, base_no_trade = "useful_data/base.bin"):
         self.fileBaseTargetName = base_no_trade
         self.connection = connection
+        self.received_one = False
+        self.verbose = verbose
+        connection.prepare_listener(GSCTradingClient.gsc_buffered_transfer, self.on_get_big_trading_data)
         self.trader = trader
         self.own_id = None
         self.other_id = None
@@ -208,6 +211,23 @@ class GSCTradingClient:
             if index < self.trader.own_pokemon.get_party_size():
                 own_mon = self.trader.own_pokemon.pokemon[index].get_data()
         self.send_with_counter(GSCTradingClient.gsc_choice_transfer, [choice] + own_mon)
+    
+    def on_get_big_trading_data(self):
+        """
+        Signals to the user that the buffered trade is ready!
+        """
+        if not self.received_one:
+            self.received_one = True
+            if self.verbose:
+                print(GSCTradingStrings.received_buffered_data_str)
+    
+    def reset_big_trading_data(self):
+        """
+        Make it so if we need to resend stuff, the buffers are clean.
+        """
+        self.connection.reset_send(GSCTradingClient.gsc_full_transfer)
+        self.connection.reset_recv(GSCTradingClient.gsc_full_transfer)
+        self.received_one = False
         
     def get_big_trading_data(self, lengths):
         """
@@ -303,7 +323,7 @@ class GSCTrading:
         self.sendByte = sending_func
         self.receiveByte = receiving_func
         self.checks = GSCChecks(self.gsc_special_sections_len, menu.do_sanity_checks)
-        self.comms = GSCTradingClient(self, connection)
+        self.comms = GSCTradingClient(self, connection, menu.verbose)
         self.menu = menu
         self.kill_function = kill_function
         self.extremely_verbose = False
@@ -548,6 +568,20 @@ class GSCTrading:
             received = fun()
             self.swap_byte(self.gsc_no_input)
         return received
+    
+    def reset_trade(self):
+        """
+        Reset the trade data...
+        """
+        self.own_pokemon = None
+        self.other_pokemon = None
+    
+    def check_reset_trade(self):
+        """
+        Reset the trade if the data can't be used anymore...
+        """
+        if self.own_blank_trade and self.other_blank_trade:
+            self.reset_trade()
 
     def do_trade(self, close=False):
         """
@@ -568,7 +602,13 @@ class GSCTrading:
                 received_data = self.force_receive(self.comms.get_chosen_mon)
                 received_choice = received_data[0]
                 received_valid = received_data[1]
+                
+                # We got here. The other player is in the menu too.
+                # Prepare the buffers for reuse, if we ever need them.
+                self.comms.reset_big_trading_data()
+
             else:
+                self.reset_trade()
                 received_choice = self.gsc_stop_trade
 
             if not self.is_choice_stop(received_choice) and not self.is_choice_stop(sent_mon):
@@ -606,6 +646,9 @@ class GSCTrading:
                     self.own_pokemon.trade_mon(self.other_pokemon, self.convert_choice(sent_mon), self.convert_choice(received_choice))
                     self.own_blank_trade = GSCUtilsMisc.default_if_none(self.own_pokemon.evolve_mon(self.own_pokemon.get_last_mon_index()), False)
                     self.other_blank_trade = GSCUtilsMisc.default_if_none(self.other_pokemon.evolve_mon(self.other_pokemon.get_last_mon_index()), False)
+                    
+                    # Check whether we need to restart entirely.
+                    self.check_reset_trade()
 
                     # Conclude the trade successfully
                     next = self.wait_for_input(next)
@@ -681,7 +724,11 @@ class GSCTrading:
         Returns whether the data is the default one or the one
         of another player.
         """
-        data, valid = self.comms.get_big_trading_data(self.gsc_special_sections_len)
+        if self.other_pokemon is None:
+            data, valid = self.comms.get_big_trading_data(self.gsc_special_sections_len)
+        else:
+            data = self.other_pokemon.create_trading_data(GSCTrading.gsc_special_sections_len)
+            valid = True
         data, data_other = self.trade_starting_sequence(True, send_data=data)
         self.comms.send_big_trading_data(data)
         self.own_pokemon = GSCTradingData(data[1], data_mail=data[2])
@@ -696,6 +743,7 @@ class GSCTrading:
         """
         self.own_blank_trade = True
         self.other_blank_trade = True
+        self.reset_trade()
         buf_neg = GSCBufferedNegotiator(self.menu, self.comms, buffered, self.sleep_func)
         buf_neg.start()
         # Start of what the player sees. Enters the room

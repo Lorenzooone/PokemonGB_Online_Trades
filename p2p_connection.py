@@ -25,6 +25,7 @@ class P2PConnection (threading.Thread):
         self.port = port
         self.room = menu.room
         self.to_send = None
+        self.on_receive_dict = {}
         self.recv_dict = {}
         self.send_dict = {}
         self.kill_function = kill_function
@@ -55,6 +56,12 @@ class P2PConnection (threading.Thread):
         self.to_send = self.prepare_send_data(type, data)
         while self.to_send is not None:
             sleep(P2PConnection.SLEEP_TIMER)
+    
+    def prepare_listener(self, type, listener):
+        """
+        Function called when a certain type of data is received.
+        """
+        self.on_receive_dict[type] = listener
     
     def recv_data(self, type, reset=True):
         """
@@ -128,7 +135,12 @@ class P2PConnection (threading.Thread):
         req_type = req_info[1:4]
         if req_kind == P2PConnection.send_request:
             data_len = (data[P2PConnection.LEN_POSITION] << 8) + data[P2PConnection.LEN_POSITION+1]
+            pre_present = False
+            if req_type in self.recv_dict.keys():
+                pre_present = True
             self.recv_dict[req_type] = list(data[P2PConnection.DATA_POSITION:P2PConnection.DATA_POSITION+data_len])
+            if req_type in self.on_receive_dict.keys():
+                self.on_receive_dict[req_type]()
         elif req_kind == P2PConnection.get_request:
             if req_type in self.send_dict.keys():
                 connection.send(self.prepare_send_data(req_type, self.send_dict[req_type]))
