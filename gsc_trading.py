@@ -590,6 +590,7 @@ class GSCTrading:
         Handles the trading menu.
         """
         trade_completed = False
+        autoclose_on_stop = False
 
         while not trade_completed:
             # Get the choice
@@ -597,13 +598,17 @@ class GSCTrading:
             sent_mon = self.wait_for_input(next)
 
             if not close:
-                # Send it to the other player
-                self.comms.send_chosen_mon(sent_mon)
+                if autoclose_on_stop and self.is_choice_stop(sent_mon):
+                    received_choice = self.gsc_stop_trade
+                else:
+                    # Send it to the other player
+                    self.comms.send_chosen_mon(sent_mon)
             
-                # Get the other player's choice
-                received_data = self.force_receive(self.comms.get_chosen_mon)
-                received_choice = received_data[0]
-                received_valid = received_data[1]
+                    # Get the other player's choice
+                    received_data = self.force_receive(self.comms.get_chosen_mon)
+                    autoclose_on_stop = False
+                    received_choice = received_data[0]
+                    received_valid = received_data[1]
             else:
                 self.reset_trade()
                 received_choice = self.gsc_stop_trade
@@ -660,9 +665,19 @@ class GSCTrading:
                     next = self.swap_byte(next)
                     
             else:
-                # If someone wants to end the trade, do it
-                trade_completed = True
-                self.end_trade()
+                if self.is_choice_stop(sent_mon) and self.is_choice_stop(received_choice):
+                    # If both players want to end the trade, do it
+                    trade_completed = True
+                    self.end_trade()
+                else:
+                    # If one player doesn't want that, get the next values.
+                    # Prepare to exit at a moment's notice though...
+                    autoclose_on_stop = True
+                    
+                    # Send the other player's choice to the game
+                    next = self.swap_byte(received_choice)
+                    next = self.wait_for_no_data(next, received_choice)
+                    next = self.wait_for_no_input(next)
 
     def enter_room(self):
         """
