@@ -30,7 +30,7 @@ class GSCTradingClient:
         self.connection = connection
         self.received_one = False
         self.verbose = verbose
-        connection.prepare_listener(GSCTradingClient.gsc_buffered_transfer, self.on_get_big_trading_data)
+        connection.prepare_listener(GSCTradingClient.gsc_full_transfer, self.on_get_big_trading_data)
         self.trader = trader
         self.own_id = None
         self.other_id = None
@@ -378,7 +378,6 @@ class GSCTrading:
                     print(GSCTradingStrings.warning_byte_dropped_str)
                 self.printed_warning_drop = True
                     
-                
     def read_section(self, index, send_data, buffered):
         """
         Reads a data section and sends it to the device.
@@ -581,6 +580,9 @@ class GSCTrading:
         Reset the trade if the data can't be used anymore...
         """
         if self.own_blank_trade and self.other_blank_trade:
+            # We got here. The other player is in the menu too.
+            # Prepare the buffered trade buffers for reuse.
+            self.comms.reset_big_trading_data()
             self.reset_trade()
 
     def do_trade(self, close=False):
@@ -602,11 +604,6 @@ class GSCTrading:
                 received_data = self.force_receive(self.comms.get_chosen_mon)
                 received_choice = received_data[0]
                 received_valid = received_data[1]
-                
-                # We got here. The other player is in the menu too.
-                # Prepare the buffers for reuse, if we ever need them.
-                self.comms.reset_big_trading_data()
-
             else:
                 self.reset_trade()
                 received_choice = self.gsc_stop_trade

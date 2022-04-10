@@ -28,7 +28,7 @@ class GSCTradingStrings:
     buffered_negotiation_str = '\nThe other player wants to do a {other_buffered} trade.\nWould you like to switch to a {other_buffered} trade?'
     buffered_other_negotiation_str = "\nAsking the other player whether they're willing to do a {own_buffered} trade..."
     buffered_chosen_str = "\nDecided to do a {own_buffered} trade."
-    received_buffered_data_str = "\nReceived the trade data from the other player!\nYou can now start the trade."
+    received_buffered_data_str = "\nReceived the trade data from the other player!\nYou can now start the real trade."
     yes_no_str = 'Choice (y = Yes, n=No): '
     action_str = "\nInput the action's number: "
     server_str = "Server: "
