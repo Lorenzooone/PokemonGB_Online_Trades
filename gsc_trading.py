@@ -710,7 +710,12 @@ class GSCTrading:
         Handles launching a synchronous trade.
         Returns True.
         """
-        data, data_other = self.trade_starting_sequence(False)
+        if self.other_pokemon is None:
+            data, data_other = self.trade_starting_sequence(False)
+        else:
+            # Generate the trading data for the device
+            # from the other player's one and use it
+            data, data_other = self.trade_starting_sequence(True, send_data=self.other_pokemon.create_trading_data(GSCTrading.gsc_special_sections_len))
         self.own_pokemon = GSCTradingData(data[1], data_mail=data[2])
         self.other_pokemon = GSCTradingData(data_other[1], data_mail=data_other[2])
         return True
@@ -724,6 +729,8 @@ class GSCTrading:
         if self.other_pokemon is None:
             data, valid = self.comms.get_big_trading_data(self.gsc_special_sections_len)
         else:
+            # Generate the trading data for the device
+            # from the other player's one and use it
             data = self.other_pokemon.create_trading_data(GSCTrading.gsc_special_sections_len)
             valid = True
         data, data_other = self.trade_starting_sequence(True, send_data=data)
