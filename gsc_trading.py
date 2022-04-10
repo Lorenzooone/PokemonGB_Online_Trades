@@ -537,26 +537,6 @@ class GSCTrading:
             return True
         return False
     
-    def check_mon_validity(self, choice, party):
-        """
-        Makes sure that both the traded mon's data ID and
-        the party's traded mon ID match. If not, the device
-        will automatically close the trade at the next step, and it prepares
-        the data for that.
-        """
-        index = self.convert_choice(choice)
-        mon_party_id = party.party_info.get_id(index)
-        if mon_party_id is None or mon_party_id != party.pokemon[index].get_species():
-            return False
-        return True
-    
-    def is_trade_valid(self, own_choice, other_choice):
-        """
-        Checks that the proposed trade is valid. and won't result in an
-        automatic decline.
-        """
-        return self.check_mon_validity(own_choice, self.own_pokemon) and self.check_mon_validity(other_choice, self.other_pokemon)
-    
     def force_receive(self, fun):
         """
         Blocking wait for the requested data.
@@ -600,8 +580,8 @@ class GSCTrading:
                 next = self.wait_for_no_input(next)
                 accepted = self.wait_for_input(next)
                 
-                # Check validity of trade (if IDs don't match, the game will refuse the trade automatically)
-                valid_trade = self.is_trade_valid(sent_mon, received_choice) and received_valid
+                # Check validity of trade
+                valid_trade = received_valid
                 if not valid_trade:
                     accepted = self.gsc_decline_trade
 

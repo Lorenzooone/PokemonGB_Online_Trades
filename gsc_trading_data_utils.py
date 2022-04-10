@@ -115,6 +115,7 @@ class GSCUtils:
     exp_groups_path = "useful_data/pokemon_exp_groups_gs.bin"
     exp_lists_path = "useful_data/pokemon_exp_gs.txt"
     everstone_id = 0x70
+    egg_id = 0xFD
     end_of_line = 0x50
     name_size = 0xB
     hp_stat_id = 0
@@ -620,14 +621,15 @@ class GSCTradingData:
         for i in range(self.get_party_size()):
             if mon.is_equal(self.pokemon[i]):
                 return i
-        for i in range(self.get_party_size()):
-            if mon.is_equal(self.pokemon[i], weak=True):
-                return i
         return None
 
     @check_pos_validity
     def mon_has_mail(self, pos):
         return self.pokemon[pos].has_mail()
+
+    @check_pos_validity
+    def is_mon_egg(self, pos):
+        return self.party_info.get_id(pos) == GSCUtils.egg_id
 
     def party_has_mail(self):
         mail_owned = False
@@ -674,8 +676,10 @@ class GSCTradingData:
         own = self.pokemon[self.get_last_mon_index()]
         self.pokemon[self.get_last_mon_index()] = other.pokemon[other.get_last_mon_index()]
         other.pokemon[other.get_last_mon_index()] = own
-        self.party_info.set_id(self.get_last_mon_index(), self.pokemon[self.get_last_mon_index()].get_species())
-        other.party_info.set_id(other.get_last_mon_index(), other.pokemon[other.get_last_mon_index()].get_species())
+        own_id = self.party_info.get_id(self.get_last_mon_index())
+        other_id = other.party_info.get_id(other.get_last_mon_index())
+        self.party_info.set_id(self.get_last_mon_index(), other_id)
+        other.party_info.set_id(other.get_last_mon_index(), own_id)
     
     @check_pos_validity
     def reorder_party(self, traded_pos):
@@ -749,7 +753,8 @@ class GSCChecks:
             self.check_stat,
             self.clean_species_sp,
             self.clean_pp,
-            self.clean_experience
+            self.clean_experience,
+            self.clean_egg_cycles_friendship
             ]
         self.checks_map = self.prepare_checks_map(GSCUtilsMisc.read_data(self.checks_map_path), section_sizes)
         self.single_pokemon_checks_map = self.prepare_basic_checks_map(GSCUtilsMisc.read_data(self.single_pokemon_checks_map_path))
@@ -875,6 +880,8 @@ class GSCChecks:
             self.curr_species_pos += 1
             return species
         found_species = self.clean_value(species, self.is_species_valid, 0x13)
+        if species == GSCUtils.egg_id:
+            found_species = species
         self.curr_species_pos += 1
         return found_species
     
@@ -954,6 +961,10 @@ class GSCChecks:
                     #Can put a warning for bad data
                     pass
         return val
+        
+    @clean_check_sanity_checks
+    def clean_egg_cycles_friendship(self, cycles_friendship):
+        return cycles_friendship
     
     def clean_value(self, value, checker, default_value):
         if checker(value):

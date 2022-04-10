@@ -32,3 +32,7 @@ Options mid-menu:
 0x7F Quit
 0x72 Trade
 0x71 No trade
+
+Poison damage is disabled in the trading room.
+Egg cycles don't count down in the trading room.
+There are in-game checks which make sure you always have at least one alive mon.
