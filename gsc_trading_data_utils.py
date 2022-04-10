@@ -584,18 +584,19 @@ class GSCTradingData:
     gsc_trading_mail_length = 0x21
     gsc_trading_mail_sender_length = 0xE
     
-    def __init__(self, data_pokemon, data_mail=None):
+    def __init__(self, data_pokemon, data_mail=None, do_full=True):
         self.trader = GSCTradingText(data_pokemon, self.gsc_trader_name_pos)
         self.party_info = GSCTradingPartyInfo(data_pokemon, self.gsc_trading_party_info_pos)
         self.trader_info = GSCUtilsMisc.read_short(data_pokemon, self.gsc_trader_info_pos)
         self.pokemon = []
-        for i in range(self.get_party_size()):
-            self.pokemon += [GSCTradingPokémonInfo(data_pokemon, self.gsc_trading_pokemon_pos + i * self.gsc_trading_pokemon_length)]
-            self.pokemon[i].add_ot_name(data_pokemon, self.gsc_trading_pokemon_ot_pos + i * self.gsc_trading_name_length)
-            self.pokemon[i].add_nickname(data_pokemon, self.gsc_trading_pokemon_nickname_pos + i * self.gsc_trading_name_length)
-            if data_mail is not None and self.pokemon[i].has_mail():
-                self.pokemon[i].add_mail(data_mail, self.gsc_trading_pokemon_mail_pos + i * self.gsc_trading_mail_length)
-                self.pokemon[i].add_mail_sender(data_mail, self.gsc_trading_pokemon_mail_sender_pos + i * self.gsc_trading_mail_sender_length)
+        if do_full:
+            for i in range(self.get_party_size()):
+                self.pokemon += [GSCTradingPokémonInfo(data_pokemon, self.gsc_trading_pokemon_pos + i * self.gsc_trading_pokemon_length)]
+                self.pokemon[i].add_ot_name(data_pokemon, self.gsc_trading_pokemon_ot_pos + i * self.gsc_trading_name_length)
+                self.pokemon[i].add_nickname(data_pokemon, self.gsc_trading_pokemon_nickname_pos + i * self.gsc_trading_name_length)
+                if data_mail is not None and self.pokemon[i].has_mail():
+                    self.pokemon[i].add_mail(data_mail, self.gsc_trading_pokemon_mail_pos + i * self.gsc_trading_mail_length)
+                    self.pokemon[i].add_mail_sender(data_mail, self.gsc_trading_pokemon_mail_sender_pos + i * self.gsc_trading_mail_sender_length)
 
     def check_pos_validity(func):
         def wrapper(*args, **kwargs):
@@ -613,13 +614,13 @@ class GSCTradingData:
     def get_last_mon_index(self):
         return self.get_party_size()-1
     
-    def search_for_mon(self, mon):
+    def search_for_mon(self, mon, is_egg):
         """
         Returns None if a provided pokémon is not in the party.
         Otherwise, it returns their index.
         """
         for i in range(self.get_party_size()):
-            if mon.is_equal(self.pokemon[i]):
+            if mon.is_equal(self.pokemon[i]) and (self.is_mon_egg(i) == is_egg):
                 return i
         return None
 
@@ -677,8 +678,7 @@ class GSCTradingData:
         self.pokemon[self.get_last_mon_index()] = other.pokemon[other.get_last_mon_index()]
         other.pokemon[other.get_last_mon_index()] = own
         own_id = self.party_info.get_id(self.get_last_mon_index())
-        other_id = other.party_info.get_id(other.get_last_mon_index())
-        self.party_info.set_id(self.get_last_mon_index(), other_id)
+        self.party_info.set_id(self.get_last_mon_index(), other.party_info.get_id(other.get_last_mon_index()))
         other.party_info.set_id(other.get_last_mon_index(), own_id)
     
     @check_pos_validity

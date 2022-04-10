@@ -12,6 +12,7 @@ class GSCTradingClient:
     """
     gsc_full_transfer = "FLL"
     gsc_single_transfer = "SNG"
+    gsc_pool_transfer = "POL"
     gsc_moves_transfer = "MVS"
     gsc_mail_transfer = "MAI"
     gsc_choice_transfer = "CHC"
@@ -23,10 +24,12 @@ class GSCTradingClient:
     gsc_not_buffered_value = 0x12
     gsc_success_value = 0x91
     max_message_id = 255
+    egg_value = 0x38
     max_negotiation_id = 255
     
-    def __init__(self, trader, connection, verbose, base_no_trade = "useful_data/base.bin"):
+    def __init__(self, trader, connection, verbose, base_no_trade = "useful_data/base.bin", base_pool = "useful_data/base_pool.bin"):
         self.fileBaseTargetName = base_no_trade
+        self.fileBasePoolTargetName = base_pool
         self.connection = connection
         self.received_one = False
         self.verbose = verbose
@@ -166,7 +169,7 @@ class GSCTradingClient:
                 actual_data = ret[1:]
                 new_actual_data = ret[1:]
                 checker = self.trader.checks.single_pokemon_checks_map
-                if len(new_actual_data) >= len(checker):
+                if len(new_actual_data) > len(checker):
                     for i in range(len(checker)):
                         new_actual_data[i] = checker[i](actual_data[i])
 
@@ -175,11 +178,15 @@ class GSCTradingClient:
                     loaded_mon = GSCTradingPokémonInfo.set_data(new_actual_data)
                     unfiltered_mon = GSCTradingPokémonInfo.set_data(actual_data)
                     
+                    # Handle getting/sending eggs. That requires one extra byte
+                    is_egg = False
+                    if actual_data[len(checker)] == GSCTradingClient.egg_value:
+                        is_egg = True
                     
                     # Searches for the pokémon. If it's not found, it uses
                     # the failsafe value. If the sanity checks are on,
                     # it will prepare to close the current trade offer
-                    found_index = self.trader.other_pokemon.search_for_mon(loaded_mon)
+                    found_index = self.trader.other_pokemon.search_for_mon(loaded_mon, is_egg)
                     if found_index is None:
                         found_index = base_index
                         if self.trader.checks.do_sanity_checks:
@@ -210,6 +217,10 @@ class GSCTradingClient:
         if choice != GSCTrading.gsc_stop_trade:
             if index < self.trader.own_pokemon.get_party_size():
                 own_mon = self.trader.own_pokemon.pokemon[index].get_data()
+                if self.trader.own_pokemon.is_mon_egg(index):
+                    own_mon += [GSCTradingClient.egg_value]
+                else:
+                    own_mon += [0]
         self.send_with_counter(GSCTradingClient.gsc_choice_transfer, [choice] + own_mon)
     
     def on_get_big_trading_data(self):
@@ -250,6 +261,36 @@ class GSCTradingClient:
         Handles sending the player's entire trading data.
         """
         self.connection.send_data(GSCTradingClient.gsc_full_transfer, data[0]+data[1]+data[2])
+        
+    def get_pool_trading_data(self, lengths):
+        """
+        Handles getting the trading data for the mon offered by the server.
+        """
+        mon = self.connection.recv_data(GSCTradingClient.gsc_pool_transfer)
+        if mon is not None:
+            # Applies the checks to the received data.
+            # If the sanity checks are off, this will be a simple copy
+            actual_data = [0] * len(mon)
+            checker = self.trader.checks.single_pokemon_checks_map
+            if len(actual_data) > len(checker):
+                for i in range(len(checker)):
+                    actual_data[i] = checker[i](mon[i])
+            
+            
+                # Handle getting/sending eggs. That requires one extra byte
+                is_egg = False
+                if actual_data[len(checker)] == GSCTradingClient.egg_value:
+                    is_egg = True
+
+                # Insert the received mon into a pre-baked party
+                received_mon = GSCTradingPokémonInfo.set_data(actual_data)
+                mon = GSCTradingData(GSCUtilsMisc.read_data(self.fileBasePoolTargetName), do_full=False)
+                mon.pokemon += [received_mon]
+                
+                # Specially handle the egg party IDs
+                if not is_egg:
+                    mon.party_info.set_id(0, mon.pokemon[0].get_species())
+        return mon
         
     def get_trading_data(self):
         """
@@ -796,6 +837,29 @@ class GSCTrading:
             
             self.own_blank_trade = True
             self.other_blank_trade = True
+            # Start interacting with the trading menu
+            self.do_trade(close=not valid)
+
+    def pool_trade(self, buffered):
+        """
+        Handles trading with the Pool.
+        """
+        self.reset_trade()
+        # Start of what the player sees. Enters the room
+        self.enter_room()
+        while True:
+            # Wait for the player to sit to the table
+            if not self.send_predefined_section(self.gsc_start_trading_states, stop_to=1, die_on_no_data=True):
+                break
+
+            # If necessary, start a normal transfer
+            if self.own_blank_trade and self.other_blank_trade:
+                buffered = self.force_receive(buf_neg.get_chosen_buffered)
+                if buffered:
+                    valid = self.buffered_trade()
+                else:
+                    valid = self.synchronous_trade()
+
             # Start interacting with the trading menu
             self.do_trade(close=not valid)
         
