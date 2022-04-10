@@ -921,10 +921,13 @@ class GSCChecks:
         return curr_stat
     
     @clean_check_sanity_checks
-    def check_stat(self, val):
+    def check_stat(self, val, zero_min=False):
         if self.curr_pos == 0:
             self.stat = 0
-            self.stat_range = [GSCUtils.stat_calculation(self.curr_stat_id, self.curr_species, self.iv, self.stat_exp, self.level, do_exp=False), GSCUtils.stat_calculation(self.curr_stat_id, self.curr_species, self.iv, self.stat_exp, self.level)]
+            min_stat = GSCUtils.stat_calculation(self.curr_stat_id, self.curr_species, self.iv, self.stat_exp, self.level, do_exp=False)
+            if zero_min:
+                min_stat = 0
+            self.stat_range = [min_stat, GSCUtils.stat_calculation(self.curr_stat_id, self.curr_species, self.iv, self.stat_exp, self.level)]
         curr_read_val = val << (8 * (1 - (self.curr_pos & 1)))
         self.stat = self.check_range(self.stat_range, (self.stat & 0xFF00) | curr_read_val)
         val = (self.stat >> (8 * (1 - (self.curr_pos & 1)))) & 0xFF
@@ -936,7 +939,10 @@ class GSCChecks:
     
     @clean_check_sanity_checks
     def check_hp(self, val):
-        val = self.check_stat(val)
+        start_zero = False
+        if self.curr_hp == 0:
+            start_zero = True
+        val = self.check_stat(val, zero_min=start_zero)
         if self.curr_pos == 0:
             if self.curr_hp == 0:
                 self.hps = [0,0]
