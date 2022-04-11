@@ -622,21 +622,24 @@ class GSCTrading:
         self.own_pokemon = None
         self.other_pokemon = None
     
-    def check_reset_trade(self):
+    def check_reset_trade(self, to_server):
         """
         Reset the trade if the data can't be used anymore...
         """
-        if (self.own_blank_trade and self.other_blank_trade) or (self.trade_type == GSCTradingStrings.pool_trade_str):
+        if to_server or (self.own_blank_trade and self.other_blank_trade):
             # We got here. The other player is in the menu too.
             # Prepare the buffered trade buffers for reuse.
             self.comms.reset_big_trading_data()
             self.reset_trade()
 
-    def do_trade(self, get_mon_function, close=False, base_autoclose=False):
+    def do_trade(self, get_mon_function, close=False, to_server=False):
         """
         Handles the trading menu.
         """
         trade_completed = False
+        base_autoclose = False
+        if to_server:
+            base_autoclose = True
         autoclose_on_stop = base_autoclose
 
         while not trade_completed:
@@ -674,11 +677,14 @@ class GSCTrading:
                 if not valid_trade:
                     accepted = self.gsc_decline_trade
 
-                # Send it to the other player
-                self.comms.send_accepted(accepted)
+                if to_server and self.is_choice_decline(accepted):
+                    received_accepted = self.gsc_decline_trade
+                else:
+                    # Send it to the other player
+                    self.comms.send_accepted(accepted)
                 
-                # Get the other player's choice
-                received_accepted = self.force_receive(self.comms.get_accepted)
+                    # Get the other player's choice
+                    received_accepted = self.force_receive(self.comms.get_accepted)
                 
                 # Check validity of trade (if IDs don't match, the game will refuse the trade automatically)
                 if not valid_trade:
@@ -697,7 +703,7 @@ class GSCTrading:
                     self.other_blank_trade = GSCUtilsMisc.default_if_none(self.other_pokemon.evolve_mon(self.other_pokemon.get_last_mon_index()), False)
                     
                     # Check whether we need to restart entirely.
-                    self.check_reset_trade()
+                    self.check_reset_trade(to_server)
 
                     # Conclude the trade successfully
                     next = self.wait_for_input(next)
@@ -869,7 +875,7 @@ class GSCTrading:
             self.own_pokemon = GSCTradingData(data[1], data_mail=data[2])
 
             # Start interacting with the trading menu
-            self.do_trade(self.get_first_mon, base_autoclose=True)
+            self.do_trade(self.get_first_mon, to_server=True)
         
     # Function needed in order to make sure there is enough time for the slave to prepare the next byte.
     def sleep_func(self, multiplier = 1):
