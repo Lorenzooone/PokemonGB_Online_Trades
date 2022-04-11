@@ -8,29 +8,31 @@ import os
 from random import Random
 from time import sleep
 import ipaddress
+from utilities.gsc_trading_listener import GSCTradingListener
+from utilities.gsc_trading import GSCTradingClient
+from utilities.gsc_trading_data_utils import *
 
-send_request = "S"
-get_request = "G"
-gsc_pool_transfer = "POL"
-gsc_choice_transfer = "CHC"
-gsc_accept_transfer = "ACP"
-gsc_success_transfer = "SUC"
+#GSCTradingClient.gsc_pool_transfer
+#GSCTradingClient.gsc_choice_transfer
+#GSCTradingClient.gsc_accept_transfer
+#GSCTradingClient.gsc_success_transfer
 link_rooms = {}
-send_dict = {}
-REQ_INFO_POSITION = 0
-LEN_POSITION = 4
-DATA_POSITION = 6
+user_pools = {}
 
 class PoolTradeServer:
     """
     Class which handles the pool trading part.
     """
     
-    def __init__(self):
+    def __init__(self, checks):
+        self.checks = checks
+        self.state = None
+        self.hll = GSCTradingListener()
         self.mon = None
         self.mon_index = None
         self.received_mon = None
-        
+        self.received_accepted = False
+        self.received_success = False
     
 class WebsocketServer (threading.Thread):
     '''
@@ -42,6 +44,8 @@ class WebsocketServer (threading.Thread):
         self.setDaemon(True)
         self.host = host
         self.port = port
+        GSCUtils()
+        self.checks = GSCChecks([0,0,0], True)
 
     async def link_function(websocket, data, path):
         '''
@@ -87,8 +91,8 @@ class WebsocketServer (threading.Thread):
             completed = False
             while not completed:
                 room = rnd.randint(0,99999)
-                if not room in send_dict.keys():
-                    send_dict[room] = {}
+                if not room in user_pools.keys():
+                    user_pools[room] = PoolTradeServer()
                     completed = True
         
         return room
@@ -106,8 +110,8 @@ class WebsocketServer (threading.Thread):
                 print(f"Terminated")
                 if curr_room in link_rooms.keys():
                     link_rooms.pop(curr_room)
-                if curr_room in send_dict.keys():
-                    send_dict.pop(curr_room)
+                if curr_room in user_pools.keys():
+                    user_pools.pop(curr_room)
                 break
             except Exception as e:
                 print('Websocket server error:', str(e))
@@ -118,7 +122,6 @@ class WebsocketServer (threading.Thread):
             if path.startswith("/pool"):
                 curr_room = await WebsocketServer.pool_function(websocket, data, curr_room)
                 
-
     def run(self):
         """
         Runs the server in a second Thread in order to keep

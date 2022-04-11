@@ -83,3 +83,4 @@ class GSCTradingListener:
         elif req_kind == GSCTradingStrings.get_request:
             if req_type in self.send_dict.keys():
                 connection.send(self.prepare_send_data(req_type, self.send_dict[req_type]))
+        return req_info
