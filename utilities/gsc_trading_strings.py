@@ -6,6 +6,8 @@ class GSCTradingStrings:
     """
     buffered_str = "Buffered"
     synchronous_str = "Synchronous"
+    send_request = "S"
+    get_request = "G"
     active_sanity_checks_str = "Disable Sanity checks (Current: Enabled)"
     inactive_sanity_checks_str = "Enable Sanity checks (Current: Disabled)"
     active_kill_on_byte_drops_str = "Disable Crash on synchronous byte drop (Current: Enabled)"
@@ -29,6 +31,8 @@ class GSCTradingStrings:
     buffered_other_negotiation_str = "\nAsking the other player whether they're willing to do a {own_buffered} trade..."
     buffered_chosen_str = "\nDecided to do a {own_buffered} trade."
     received_buffered_data_str = "\nReceived the trade data from the other player!\nYou can now start the real trade."
+    two_player_trade_str = "2P"
+    pool_trade_str = "PS"
     yes_no_str = 'Choice (y = Yes, n=No): '
     action_str = "\nInput the action's number: "
     server_str = "Server: "

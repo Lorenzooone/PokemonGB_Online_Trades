@@ -1,5 +1,5 @@
 import math
-from gsc_trading_strings import GSCTradingStrings
+from .gsc_trading_strings import GSCTradingStrings
 
 class GSCUtilsLoaders:
     """

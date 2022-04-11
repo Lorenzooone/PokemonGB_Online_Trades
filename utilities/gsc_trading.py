@@ -1,8 +1,8 @@
 import time
 from random import Random
-from gsc_trading_data_utils import *
-from gsc_trading_menu import GSCBufferedNegotiator
-from gsc_trading_strings import GSCTradingStrings
+from .gsc_trading_data_utils import *
+from .gsc_trading_menu import GSCBufferedNegotiator
+from .gsc_trading_strings import GSCTradingStrings
 
 class GSCTradingClient:
     """
@@ -30,10 +30,10 @@ class GSCTradingClient:
     def __init__(self, trader, connection, verbose, base_no_trade = "useful_data/base.bin", base_pool = "useful_data/base_pool.bin"):
         self.fileBaseTargetName = base_no_trade
         self.fileBasePoolTargetName = base_pool
-        self.connection = connection
+        self.connection = connection.hll
         self.received_one = False
         self.verbose = verbose
-        connection.prepare_listener(GSCTradingClient.gsc_full_transfer, self.on_get_big_trading_data)
+        self.connection.prepare_listener(GSCTradingClient.gsc_full_transfer, self.on_get_big_trading_data)
         self.trader = trader
         self.own_id = None
         self.other_id = None
@@ -262,7 +262,7 @@ class GSCTradingClient:
         """
         self.connection.send_data(GSCTradingClient.gsc_full_transfer, data[0]+data[1]+data[2])
         
-    def get_pool_trading_data(self, lengths):
+    def get_pool_trading_data(self):
         """
         Handles getting the trading data for the mon offered by the server.
         """
@@ -577,6 +577,12 @@ class GSCTrading:
             return True
         return False
     
+    def get_first_mon(self):
+        """
+        Returns the first index as the choice.
+        """
+        return self.gsc_first_trade_index
+    
     def convert_choice(self, choice):
         """
         Converts the menu choice to an index.
@@ -620,18 +626,18 @@ class GSCTrading:
         """
         Reset the trade if the data can't be used anymore...
         """
-        if self.own_blank_trade and self.other_blank_trade:
+        if (self.own_blank_trade and self.other_blank_trade) or (self.trade_type == GSCTradingStrings.pool_trade_str):
             # We got here. The other player is in the menu too.
             # Prepare the buffered trade buffers for reuse.
             self.comms.reset_big_trading_data()
             self.reset_trade()
 
-    def do_trade(self, close=False):
+    def do_trade(self, get_mon_function, close=False, base_autoclose=False):
         """
         Handles the trading menu.
         """
         trade_completed = False
-        autoclose_on_stop = False
+        autoclose_on_stop = base_autoclose
 
         while not trade_completed:
             # Get the choice
@@ -646,8 +652,8 @@ class GSCTrading:
                     self.comms.send_chosen_mon(sent_mon)
             
                     # Get the other player's choice
-                    received_data = self.force_receive(self.comms.get_chosen_mon)
-                    autoclose_on_stop = False
+                    received_data = self.force_receive(get_mon_function)
+                    autoclose_on_stop = base_autoclose
                     received_choice = received_data[0]
                     received_valid = received_data[1]
             else:
@@ -803,6 +809,7 @@ class GSCTrading:
         """
         self.own_blank_trade = True
         self.other_blank_trade = True
+        self.trade_type = GSCTradingStrings.two_player_trade_str
         self.reset_trade()
         buf_neg = GSCBufferedNegotiator(self.menu, self.comms, buffered, self.sleep_func)
         buf_neg.start()
@@ -838,12 +845,15 @@ class GSCTrading:
             self.own_blank_trade = True
             self.other_blank_trade = True
             # Start interacting with the trading menu
-            self.do_trade(close=not valid)
+            self.do_trade(self.comms.get_chosen_mon, close=not valid)
 
-    def pool_trade(self, buffered):
+    def pool_trade(self):
         """
         Handles trading with the Pool.
         """
+        self.own_blank_trade = True
+        self.other_blank_trade = True
+        self.trade_type = GSCTradingStrings.pool_trade_str
         self.reset_trade()
         # Start of what the player sees. Enters the room
         self.enter_room()
@@ -852,16 +862,14 @@ class GSCTrading:
             if not self.send_predefined_section(self.gsc_start_trading_states, stop_to=1, die_on_no_data=True):
                 break
 
-            # If necessary, start a normal transfer
-            if self.own_blank_trade and self.other_blank_trade:
-                buffered = self.force_receive(buf_neg.get_chosen_buffered)
-                if buffered:
-                    valid = self.buffered_trade()
-                else:
-                    valid = self.synchronous_trade()
+            # Get data from the server and then use it to start the trade
+            if self.other_pokemon is None:
+                self.other_pokemon = self.force_receive(self.comms.get_pool_trading_data)
+            data, data_other = self.trade_starting_sequence(True, send_data=self.other_pokemon.create_trading_data(GSCTrading.gsc_special_sections_len))
+            self.own_pokemon = GSCTradingData(data[1], data_mail=data[2])
 
             # Start interacting with the trading menu
-            self.do_trade(close=not valid)
+            self.do_trade(self.get_first_mon, base_autoclose=True)
         
     # Function needed in order to make sure there is enough time for the slave to prepare the next byte.
     def sleep_func(self, multiplier = 1):

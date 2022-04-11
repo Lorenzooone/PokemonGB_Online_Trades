@@ -4,7 +4,7 @@ import select
 import timeit
 import threading
 from time import sleep
-from gsc_trading_strings import GSCTradingStrings
+from .gsc_trading_strings import GSCTradingStrings
 
 # Implements the BGB link cable protocol
 # See https://bgb.bircd.org/bgblink.html

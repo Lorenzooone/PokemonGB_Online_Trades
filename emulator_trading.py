@@ -1,12 +1,13 @@
 #!/usr/bin/python3
 import signal
 import os
-from bgb_link_cable_server import BGBLinkCableServer
-from p2p_connection import P2PConnection
+from utilities.bgb_link_cable_server import BGBLinkCableServer
+from utilities.p2p_connection import P2PConnection
+from utilities.websocket_client import WebsocketRunner
 from time import sleep
-from gsc_trading import GSCTrading
-from gsc_trading_menu import GSCTradingMenu
-from gsc_trading_strings import GSCTradingStrings
+from utilities.gsc_trading import GSCTrading
+from utilities.gsc_trading_menu import GSCTradingMenu
+from utilities.gsc_trading_strings import GSCTradingStrings
 
 class PokeTrader:
     SLEEP_TIMER = 0.001
@@ -14,11 +15,14 @@ class PokeTrader:
     def __init__(self, menu):
         self.curr_recv = None
         self._server = BGBLinkCableServer(self.update_data, menu, kill_function)
-        self._p2p_conn = P2PConnection(menu, kill_function)
+        if menu.trade_type == GSCTradingStrings.two_player_trade_str:
+            self.connection = P2PConnection(menu, kill_function)
+        elif menu.trade_type == GSCTradingStrings.pool_trade_str:
+            self.connection = WebsocketRunner(menu, kill_function)
 
     def run(self):
         self._server.start()
-        self._p2p_conn.start()
+        self.connection.start()
         
     def update_data(self, data):
         self.curr_recv = data
@@ -53,10 +57,12 @@ def transfer_func(p, menu):
     if menu.verbose:
         print(GSCTradingStrings.waiting_transfer_start_str)
     
-    trade_c = GSCTrading(p.sendByte, p.receiveByte, p._p2p_conn, menu, kill_function)
-    res = trade_c.player_trade(menu.buffered) # Read the starting information
+    trade_c = GSCTrading(p.sendByte, p.receiveByte, p.connection, menu, kill_function)
     
-    return
+    if menu.trade_type == GSCTradingStrings.two_player_trade_str:
+        trade_c.player_trade(menu.buffered)
+    elif menu.trade_type == GSCTradingStrings.pool_trade_str:
+        trade_c.pool_trade()
 
 menu = GSCTradingMenu(is_emulator=True)
 menu.handle_menu()

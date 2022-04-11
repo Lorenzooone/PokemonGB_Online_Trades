@@ -5,10 +5,11 @@ import sys
 import traceback
 import time
 import os
-from gsc_trading import GSCTrading
-from p2p_connection import P2PConnection
-from gsc_trading_menu import GSCTradingMenu
-from gsc_trading_strings import GSCTradingStrings
+from utilities.gsc_trading import GSCTrading
+from utilities.websocket_client import WebsocketRunner
+from utilities.p2p_connection import P2PConnection
+from utilities.gsc_trading_menu import GSCTradingMenu
+from utilities.gsc_trading_strings import GSCTradingStrings
 
 dev = None
 
@@ -18,12 +19,19 @@ def transfer_func():
     
     if menu.verbose:
         print(GSCTradingStrings.waiting_transfer_start_str)
-    p2p_conn = P2PConnection(menu, kill_function)
-    trade_c = GSCTrading(sendByte, receiveByte, p2p_conn, menu, kill_function)
-    p2p_conn.start()
-    res = trade_c.player_trade(menu.buffered) # Read the starting information
+        
+    if menu.trade_type == GSCTradingStrings.two_player_trade_str:
+        connection = P2PConnection(menu, kill_function)
+    elif menu.trade_type == GSCTradingStrings.pool_trade_str:
+        connection = WebsocketRunner(menu, kill_function)
+        
+    trade_c = GSCTrading(sendByte, receiveByte, connection, menu, kill_function)
+    connection.start()
     
-    return
+    if menu.trade_type == GSCTradingStrings.two_player_trade_str:
+        trade_c.player_trade(menu.buffered)
+    elif menu.trade_type == GSCTradingStrings.pool_trade_str:
+        trade_c.pool_trade()
 
 # Code dependant on this connection method
 def sendByte(byte_to_send):

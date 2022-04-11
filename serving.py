@@ -9,8 +9,29 @@ from random import Random
 from time import sleep
 import ipaddress
 
+send_request = "S"
+get_request = "G"
+gsc_pool_transfer = "POL"
+gsc_choice_transfer = "CHC"
+gsc_accept_transfer = "ACP"
+gsc_success_transfer = "SUC"
 link_rooms = {}
+send_dict = {}
+REQ_INFO_POSITION = 0
+LEN_POSITION = 4
+DATA_POSITION = 6
 
+class PoolTradeServer:
+    """
+    Class which handles the pool trading part.
+    """
+    
+    def __init__(self):
+        self.mon = None
+        self.mon_index = None
+        self.received_mon = None
+        
+    
 class WebsocketServer (threading.Thread):
     '''
     Class which handles responding to the websocket requests.
@@ -54,6 +75,23 @@ class WebsocketServer (threading.Thread):
                     await info[1].send(reply_old)
                     await websocket.send(reply_new)
         return room
+    
+    async def pool_function(websocket, data, room):
+        '''
+        Handler which handles pool trading messages.
+        '''
+        # Assign an ID to the user
+        if room >= 100000:
+            rnd = Random()
+            rnd.seed()
+            completed = False
+            while not completed:
+                room = rnd.randint(0,99999)
+                if not room in send_dict.keys():
+                    send_dict[room] = {}
+                    completed = True
+        
+        return room
 
     async def handler(websocket, path):
         """
@@ -68,14 +106,18 @@ class WebsocketServer (threading.Thread):
                 print(f"Terminated")
                 if curr_room in link_rooms.keys():
                     link_rooms.pop(curr_room)
+                if curr_room in send_dict.keys():
+                    send_dict.pop(curr_room)
                 break
             except Exception as e:
                 print('Websocket server error:', str(e))
                 if curr_room in link_rooms.keys():
                     link_rooms.pop(curr_room)
-
             if path.startswith("/link/"):
                 curr_room = await WebsocketServer.link_function(websocket, data, path)
+            if path.startswith("/pool"):
+                curr_room = await WebsocketServer.pool_function(websocket, data, curr_room)
+                
 
     def run(self):
         """

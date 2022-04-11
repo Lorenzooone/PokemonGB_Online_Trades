@@ -1,6 +1,6 @@
 import threading
 from random import Random
-from gsc_trading_strings import GSCTradingStrings
+from .gsc_trading_strings import GSCTradingStrings
 
 class GSCTradingMenu:
     """
@@ -72,13 +72,13 @@ class GSCTradingMenu:
         return r.randint(0,99999)
     
     def start_2p_trading(self):
-        self.trade_type = GSCTradingMenu.two_player_trade_str
+        self.trade_type = GSCTradingStrings.two_player_trade_str
         GSCTradingStrings.change_room_print(self.room)
         self.room = self.get_int(self.room)
         return True
     
     def start_pool_trading(self):
-        self.trade_type = GSCTradingMenu.pool_trade_str
+        self.trade_type = GSCTradingStrings.pool_trade_str
         return True
     
     def handle_options(self):
