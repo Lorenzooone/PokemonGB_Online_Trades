@@ -1,4 +1,5 @@
 import math
+import sys
 from .gsc_trading_strings import GSCTradingStrings
 
 class GSCUtilsLoaders:
@@ -122,6 +123,7 @@ class GSCUtils:
     stat_id_base_conv_table = [0,1,2,5,3,4]
     stat_id_iv_conv_table = [0,0,1,2,3,3]
     stat_id_exp_conv_table = [0,1,2,3,4,4]
+    egg_value = 0x38
     min_level = 2
     max_level = 100
     
@@ -223,6 +225,42 @@ class GSCUtils:
     
     def get_evolution_item(species):
         return GSCUtils.evolution_ids[species][1]
+    
+    def single_mon_from_data(checks, data):
+        ret = None
+        
+        # Prepare sanity checks stuff
+        checks.prepare_text_buffer()
+        checker = checks.single_pokemon_checks_map
+        
+        if len(data) > len(checker):
+            # Applies the checks to the received data.
+            # If the sanity checks are off, this will be a simple copy
+            purified_data = data[:]
+            for j in range(len(checker)):
+                purified_data[j] = checker[j](data[j])
+                
+            # Prepares the pokémon data. For both the cleaned one and
+            # the raw one
+            raw = GSCTradingPokémonInfo.set_data(data)
+            mon = GSCTradingPokémonInfo.set_data(purified_data)
+            
+            # Handle getting/sending eggs. That requires one extra byte
+            is_egg = False
+            if purified_data[len(checker)] == GSCUtils.egg_value:
+                is_egg = True
+            
+            # If the sanity checks are on, has the pokémon changed
+            # too much from the cleaning?
+            if not mon.has_changed_significantly(raw):
+                ret = [mon, is_egg]
+        return ret
+    
+    def single_mon_to_data(mon, is_egg):
+        egg_val = 0
+        if is_egg:
+            egg_val = GSCUtils.egg_value
+        return mon.get_data() + [egg_val]
 
 class GSCUtilsMisc:
     """
@@ -239,6 +277,15 @@ class GSCUtilsMisc:
         except FileNotFoundError as e:
             pass
         return data
+
+    def write_data(target, data):
+        try:
+            with open(target, 'wb') as newFile:
+                newFile.write(bytearray(data))
+        except IOError as e:
+           print(GSCTradingStrings.io_error_str.format(e.errno, e.strerror))
+        except: #handle other exceptions such as attribute errors
+           print(GSCTradingStrings.unknown_error_str, sys.exc_info()[0])
     
     def read_nybbles(val):
         return [(val&0xF0) >> 4, val & 0xF]
@@ -353,8 +400,7 @@ class GSCTradingPokémonInfo:
         self.values = data[start:start+length]
         self.mail = None
         self.mail_sender = None
-        if GSCTradingPokémonInfo._precalced_lengths is None:
-            GSCTradingPokémonInfo._precalced_lengths = GSCUtilsMisc.calc_divide_lengths(GSCTradingPokémonInfo.all_lengths)
+        GSCTradingPokémonInfo.prepare_precalced_lengths()
 
     def add_ot_name(self, data, start):
         self.ot_name = GSCTradingText(data, start, length=GSCTradingPokémonInfo.ot_name_len)
@@ -373,6 +419,10 @@ class GSCTradingPokémonInfo:
     
     def get_species(self):
         return self.values[0]
+        
+    def prepare_precalced_lengths():
+        if GSCTradingPokémonInfo._precalced_lengths is None:
+            GSCTradingPokémonInfo._precalced_lengths = GSCUtilsMisc.calc_divide_lengths(GSCTradingPokémonInfo.all_lengths)
     
     def learnable_moves(self):
         """
@@ -544,6 +594,7 @@ class GSCTradingPokémonInfo:
         """
         Returns all the data used to represent this pokemon.
         """
+        GSCTradingPokémonInfo.prepare_precalced_lengths()
         sources = [self, self.ot_name, self.nickname]
         mail_sources = [self.mail, self.mail_sender]
         data = [0] * GSCTradingPokémonInfo._precalced_lengths[len(sources)+len(mail_sources)]
@@ -558,6 +609,7 @@ class GSCTradingPokémonInfo:
         """
         Creates an entry from the given data.
         """
+        GSCTradingPokémonInfo.prepare_precalced_lengths()
         mon = GSCTradingPokémonInfo(data, GSCTradingPokémonInfo._precalced_lengths[0])
         mon.add_ot_name(data, GSCTradingPokémonInfo._precalced_lengths[1])
         mon.add_nickname(data, GSCTradingPokémonInfo._precalced_lengths[2])

@@ -21,6 +21,8 @@ class GSCTradingStrings:
     p2p_client_str = 'Connecting to {host}:{port}...'
     socket_error_str = 'Socket error:'
     index_error_str = "Index error!"
+    io_error_str = "I/O error({0}): {1}"
+    unknown_error_str = "Unexpected error:"
     unrecognized_character_str = "UNRECOGNIZED CHARACTER: {letter}"
     error_byte_dropped_str = "Error! At least one byte was not properly transfered!"
     warning_byte_dropped_str = "Warning! At least one byte was not properly transfered!"

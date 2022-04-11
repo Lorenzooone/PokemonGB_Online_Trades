@@ -10,6 +10,7 @@ from time import sleep
 import ipaddress
 from utilities.gsc_trading_listener import GSCTradingListener
 from utilities.gsc_trading import GSCTradingClient
+from utilities.gsc_trading_strings import GSCTradingStrings
 from utilities.gsc_trading_data_utils import *
 
 #GSCTradingClient.gsc_pool_transfer
@@ -18,21 +19,66 @@ from utilities.gsc_trading_data_utils import *
 #GSCTradingClient.gsc_success_transfer
 link_rooms = {}
 user_pools = {}
+mons = []
+in_use_mons = set()
+
+class ServerUtils:
+    saved_mons_path = "pool_mons.bin"
+    
+    def save_mons():
+        data = []
+        for m in mons:
+            data += GSCUtils.single_mon_to_data(m[0], m[1])
+        GSCUtilsMisc.write_data(ServerUtils.saved_mons_path, data)
+    
+    def load_mons(checks):
+        global mons, in_use_mons
+        preparing_mons = []
+        raw_data = GSCUtilsMisc.read_data(ServerUtils.saved_mons_path)
+        if raw_data is not None:
+            single_entry_len = len(checks.single_pokemon_checks_map) + 1
+            entries = int(len(raw_data)/single_entry_len)
+            for i in range(entries):
+                mon = GSCUtils.single_mon_from_data(checks, raw_data[i*single_entry_len:(i+1)*single_entry_len])
+                if mon is not None:
+                    preparing_mons += [mon]
+            in_use_mons = set()
+            mons = preparing_mons
+    
+    def get_mon_index(index):
+        while index is None:
+            rnd = Random()
+            rnd.seed()
+            new_index = rnd.randint(0,len(mons)-1)
+            if new_index not in in_use_mons:
+                in_use_mons.add(new_index)
+                index = new_index
+        return index, mons[index]
 
 class PoolTradeServer:
     """
     Class which handles the pool trading part.
     """
     
-    def __init__(self, checks):
-        self.checks = checks
+    def __init__(self):
+        self.checks = GSCChecks([0,0,0], True)
+        self.checker = self.checks.single_pokemon_checks_map
         self.state = None
+        rnd = Random()
+        rnd.seed()
+        self.own_id = rnd.randint(0,255)
         self.hll = GSCTradingListener()
-        self.mon = None
         self.mon_index = None
         self.received_mon = None
         self.received_accepted = False
         self.received_success = False
+    
+    async def process(self, data, connection):
+        request = self.hll.process_received_data(data, connection, send_data=False)
+        if request[0] == GSCTradingStrings.get_request:
+            if request[1] == GSCTradingClient.gsc_pool_transfer:
+                self.mon_index, mon = ServerUtils.get_mon_index(self.mon_index)
+                await connection.send(self.hll.prepare_send_data(request[1], [0] + GSCUtils.single_mon_to_data(mon[0], mon[1])))
     
 class WebsocketServer (threading.Thread):
     '''
@@ -44,8 +90,9 @@ class WebsocketServer (threading.Thread):
         self.setDaemon(True)
         self.host = host
         self.port = port
-        GSCUtils()
         self.checks = GSCChecks([0,0,0], True)
+        self.checker = self.checks.single_pokemon_checks_map
+        ServerUtils.load_mons(self.checks)
 
     async def link_function(websocket, data, path):
         '''
@@ -95,6 +142,8 @@ class WebsocketServer (threading.Thread):
                     user_pools[room] = PoolTradeServer()
                     completed = True
         
+        await user_pools[room].process(data, websocket)
+        
         return room
 
     async def handler(websocket, path):
@@ -140,6 +189,7 @@ def signal_handler(sig, frame):
     print('You pressed Ctrl+C!')
     exit_gracefully()
 
+GSCUtils()
 ws = WebsocketServer()
 ws.start()
 

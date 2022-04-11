@@ -130,3 +130,7 @@ dmypy.json
 
 emu.bin
 usb.bin
+pool_mons.bin
+
+#HxD backup files
+*.bak

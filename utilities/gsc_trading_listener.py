@@ -62,7 +62,7 @@ class GSCTradingListener:
                 return self.recv_dict.pop(type)
             return self.recv_dict[type]
     
-    def process_received_data(self, data, connection):
+    def process_received_data(self, data, connection, send_data=True):
         """
         Processes the received data. If it's a send, it stores
         it inside of the received dict.
@@ -81,6 +81,6 @@ class GSCTradingListener:
             if req_type in self.on_receive_dict.keys():
                 self.on_receive_dict[req_type]()
         elif req_kind == GSCTradingStrings.get_request:
-            if req_type in self.send_dict.keys():
+            if req_type in self.send_dict.keys() and send_data:
                 connection.send(self.prepare_send_data(req_type, self.send_dict[req_type]))
-        return req_info
+        return [req_kind, req_type]
