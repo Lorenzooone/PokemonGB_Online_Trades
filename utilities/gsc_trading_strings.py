@@ -32,6 +32,7 @@ class GSCTradingStrings:
     enter_trading_room_str = "\nPlease enter the trading room..."
     entered_trading_room_str = "\nEntered the trading room..."
     sit_table_str = "\nYou can now either sit at the table, or quit the room..."
+    buffered_sit_table_str = "Please sit at the table to send to the other player your trading data."
     not_received_buffered_data_str = "\nThe other player has not sent their buffered data yet.\nStarting a trade in order to get your data, so the other player can use it."
     found_buffered_data_str = "\nFound the other player's data.\nStarting the trade and sending your data to them, if they don't have it yet."
     recycle_data_str = "\nReusing the previously received data."
@@ -126,6 +127,8 @@ class GSCTradingStrings:
     
     def chosen_buffered_print(buffered):
         print(GSCTradingStrings.buffered_chosen_str.format(own_buffered = GSCTradingStrings.get_buffered_str(buffered)))
+        if buffered:
+            print(GSCTradingStrings.buffered_sit_table_str)
             
     def top_menu_print():
         print(GSCTradingStrings.top_level_menu_str)
