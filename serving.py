@@ -268,6 +268,15 @@ class WebsocketServer (threading.Thread):
         await user_pools[room].process(data, websocket)
         
         return room
+        
+    def cleaner(identifier, path):
+        if path.startswith("/link/") and identifier in link_rooms.keys():
+            link_rooms.pop(identifier)
+        if path.startswith("/pool") and identifier in user_pools.keys():
+            pool = user_pools.pop(identifier)
+            if pool.mon_index is not None:
+                if pool.mon_index in in_use_mons:
+                    in_use_mons.remove(pool.mon_index)
 
     async def handler(websocket, path):
         """
@@ -280,17 +289,12 @@ class WebsocketServer (threading.Thread):
                 data = await websocket.recv()
             except websockets.ConnectionClosed:
                 print(f"Terminated")
-                if curr_room in link_rooms.keys():
-                    link_rooms.pop(curr_room)
-                if curr_room in user_pools.keys():
-                    user_pools.pop(curr_room)
+                WebsocketServer.cleaner(curr_room, path)
                 break
             except Exception as e:
                 print('Websocket server error:', str(e))
-                if curr_room in link_rooms.keys():
-                    link_rooms.pop(curr_room)
-                if curr_room in user_pools.keys():
-                    user_pools.pop(curr_room)
+                WebsocketServer.cleaner(curr_room, path)
+                break
             if path.startswith("/link/"):
                 curr_room = await WebsocketServer.link_function(websocket, data, path)
             if path.startswith("/pool"):
