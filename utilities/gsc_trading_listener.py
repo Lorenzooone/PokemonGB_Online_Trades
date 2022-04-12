@@ -7,8 +7,8 @@ class GSCTradingListener:
     """
     SLEEP_TIMER = 0.01
     REQ_INFO_POSITION = 0
-    LEN_POSITION = 4
-    DATA_POSITION = 6
+    LEN_POSITION = 5
+    DATA_POSITION = LEN_POSITION + 2
     
     def __init__(self):
         self.to_send = None
@@ -62,16 +62,29 @@ class GSCTradingListener:
                 return self.recv_dict.pop(type)
             return self.recv_dict[type]
     
-    def process_received_data(self, data, connection, send_data=True):
+    def connection_normal_sender(self, req_type, connection):
+        """
+        Sends the data if it's there.
+        """
+        connection.send(self.prepare_send_data(req_type, self.send_dict[req_type]))
+    
+    def connection_prepare_sender(self, req_type):
+        """
+        Prepares the data which will be sent if it's there.
+        """
+        return self.prepare_send_data(req_type, self.send_dict[req_type])
+    
+    def process_received_data(self, data, connection, send_data=True, preparer=False):
         """
         Processes the received data. If it's a send, it stores
         it inside of the received dict.
         If it's a get, it sends the requested data, if present
         inside the send dict.
         """
-        req_info = data[GSCTradingListener.REQ_INFO_POSITION:GSCTradingListener.REQ_INFO_POSITION+4].decode()
+        req_info = data[GSCTradingListener.REQ_INFO_POSITION:GSCTradingListener.REQ_INFO_POSITION+GSCTradingListener.LEN_POSITION].decode()
         req_kind = req_info[0]
-        req_type = req_info[1:4]
+        req_type = req_info[1:GSCTradingListener.LEN_POSITION]
+        prepared = None
         if req_kind == GSCTradingStrings.send_request:
             data_len = (data[GSCTradingListener.LEN_POSITION] << 8) + data[GSCTradingListener.LEN_POSITION+1]
             pre_present = False
@@ -82,5 +95,8 @@ class GSCTradingListener:
                 self.on_receive_dict[req_type]()
         elif req_kind == GSCTradingStrings.get_request:
             if req_type in self.send_dict.keys() and send_data:
-                connection.send(self.prepare_send_data(req_type, self.send_dict[req_type]))
-        return [req_kind, req_type]
+                if not preparer:
+                    self.connection_normal_sender(req_type, connection)
+                else:
+                    prepared = self.connection_prepare_sender(req_type)
+        return [req_kind, req_type, prepared]

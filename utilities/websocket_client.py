@@ -12,19 +12,16 @@ class WebsocketRunner (threading.Thread):
     Class for running the websocket as a standalone piece.
     """
     SLEEP_TIMER = 0.01
-    REQ_INFO_POSITION = 0
-    LEN_POSITION = 4
-    DATA_POSITION = 6
     
     def __init__(self, menu, kill_function):
         threading.Thread.__init__(self)
+        self.setDaemon(True)
         self.hll = GSCTradingListener()
         self.kill_function = kill_function
         self.ws = WebsocketClient(menu.server[0], menu.server[1], kill_function)
 
     def run(self):
         self.ws.get_pool(self.hll)
-        
 
 class WebsocketClient:
     """
@@ -56,7 +53,11 @@ class WebsocketClient:
 
     async def consumer_handler(websocket, other):
         async for message in websocket:
-            other.process_received_data(message, websocket)
+            response = other.process_received_data(message, websocket, preparer=True)
+            if response[2] is not None:
+                other.to_send = response[2]
+                while other.to_send is not None:
+                    await asyncio.sleep(WebsocketClient.SLEEP_TIMER)
             
     async def producer_handler(websocket, other):
         while True:

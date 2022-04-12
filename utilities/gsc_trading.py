@@ -10,16 +10,16 @@ class GSCTradingClient:
     to/from the other recepient.
     It uses a system of TAGs and IDs.
     """
-    gsc_full_transfer = "FLL"
-    gsc_single_transfer = "SNG"
-    gsc_pool_transfer = "POL"
-    gsc_moves_transfer = "MVS"
-    gsc_mail_transfer = "MAI"
-    gsc_choice_transfer = "CHC"
-    gsc_accept_transfer = "ACP"
-    gsc_success_transfer = "SUC"
-    gsc_buffered_transfer = "BUF"
-    gsc_negotiation_transfer = "NEG"
+    gsc_full_transfer = "FLL2"
+    gsc_single_transfer = "SNG2"
+    gsc_pool_transfer = "POL2"
+    gsc_moves_transfer = "MVS2"
+    gsc_mail_transfer = "MAI2"
+    gsc_choice_transfer = "CHC2"
+    gsc_accept_transfer = "ACP2"
+    gsc_success_transfer = "SUC2"
+    gsc_buffered_transfer = "BUF2"
+    gsc_negotiation_transfer = "NEG2"
     gsc_buffered_value = 0x85
     gsc_not_buffered_value = 0x12
     gsc_success_value = 0x91
@@ -545,7 +545,7 @@ class GSCTrading:
         """
         Returns the first index as the choice.
         """
-        return self.gsc_first_trade_index
+        return self.gsc_first_trade_index, True
     
     def convert_choice(self, choice):
         """

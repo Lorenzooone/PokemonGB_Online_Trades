@@ -236,7 +236,7 @@ class GSCUtils:
         if len(data) > len(checker):
             # Applies the checks to the received data.
             # If the sanity checks are off, this will be a simple copy
-            purified_data = data[:]
+            purified_data = list(data)
             for j in range(len(checker)):
                 purified_data[j] = checker[j](data[j])
                 
