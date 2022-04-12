@@ -76,6 +76,7 @@ class WebsocketClient:
         )
         for task in pending:
             task.cancel()
+        WebsocketClient.kill_function()
 
     async def server_connect(other, loop):
         """
