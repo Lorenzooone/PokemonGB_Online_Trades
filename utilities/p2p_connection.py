@@ -4,6 +4,7 @@ import select
 from .websocket_client import WebsocketClient
 from time import sleep
 from .gsc_trading_strings import GSCTradingStrings
+from .gsc_trading_data_utils import GSCUtilsMisc
 from .gsc_trading_listener import GSCTradingListener
 
 class P2PConnection (threading.Thread):
@@ -23,6 +24,12 @@ class P2PConnection (threading.Thread):
         self.hll = GSCTradingListener()
         self.kill_function = kill_function
         self.ws = WebsocketClient(menu.server[0], menu.server[1], kill_function)
+    
+    def verbose_print(self, to_print, end='\n'):
+        """
+        Print if verbose...
+        """
+        GSCUtilsMisc.verbose_print(to_print, self.verbose, end=end)
 
     def run(self):
         """
@@ -40,8 +47,7 @@ class P2PConnection (threading.Thread):
                 
             s.listen(1)
             real_port = int(s.getsockname()[1])
-            if self.verbose:
-                print(GSCTradingStrings.p2p_listening_str.format(host=self.host, port=real_port))
+            self.verbose_print(GSCTradingStrings.p2p_listening_str.format(host=self.host, port=real_port))
                 
             response = self.ws.get_peer(self.host, real_port, self.room)
             if response.startswith("SERVER"):
@@ -54,8 +60,7 @@ class P2PConnection (threading.Thread):
             if is_server:
                 #Get client's connection
                 connection, client_addr = s.accept()
-                if self.verbose:
-                    print(GSCTradingStrings.p2p_server_str.format(host=client_addr[0], port=client_addr[1]))
+                self.verbose_print(GSCTradingStrings.p2p_server_str.format(host=client_addr[0], port=client_addr[1]))
 
                 with connection:
                     self.socket_conn(connection)
@@ -65,8 +70,7 @@ class P2PConnection (threading.Thread):
         if not is_server:            
             #Connect to the other client
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                if self.verbose:
-                    print(GSCTradingStrings.p2p_client_str.format(host=other_host, port=other_port))
+                self.verbose_print(GSCTradingStrings.p2p_client_str.format(host=other_host, port=other_port))
                 s.connect((other_host, other_port))
                 self.socket_conn(s)
     

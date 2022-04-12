@@ -24,17 +24,49 @@ class GSCTradingStrings:
     io_error_str = "I/O error({0}): {1}"
     unknown_error_str = "Unexpected error:"
     unrecognized_character_str = "UNRECOGNIZED CHARACTER: {letter}"
-    error_byte_dropped_str = "Error! At least one byte was not properly transfered!"
-    warning_byte_dropped_str = "Warning! At least one byte was not properly transfered!"
+    error_byte_dropped_str = "\nError! At least one byte was not properly transfered!\nIf this happens often, you might want to do a buffered trade instead!"
+    warning_byte_dropped_str = "\nWarning! At least one byte was not properly transfered!\nIf this happens often, you might want to do a buffered trade instead!"
     byte_transfer_str = "{send_data} - {recv}"
     crtlc_str = 'You pressed Ctrl+C!'
     waiting_transfer_start_str = "Waiting for the transfer to start..."
+    enter_trading_room_str = "\nPlease enter the trading room..."
+    entered_trading_room_str = "\nEntered the trading room..."
+    sit_table_str = "\nYou can now either sit at the table, or quit the room..."
+    not_received_buffered_data_str = "\nThe other player has not sent their buffered data yet.\nStarting a trade in order to get your data, so the other player can use it."
+    found_buffered_data_str = "\nFound the other player's data.\nStarting the trade and sending your data to them, if they don't have it yet."
+    recycle_data_str = "\nReusing the previously received data."
+    choice_send_str = "\nSending your choice."
+    choice_recv_str = "\nWaiting for the other player's choice..."
+    accepted_send_str = "\nSending {accepted_str}."
+    accepted_wait_str = "\nWaiting for the answer..."
+    success_send_str = "\nSending trade confirmation..."
+    success_wait_str = "\nWaiting for trade confirmation..."
+    close_str = "\nClosing the trade..."
+    close_on_next_str = "\nOne of the players wants to close the trade.\nEnabled auto-closing on the next selection..."
+    quit_trade_str = "\nYou should now quit the current trade."
+    waiting_synchro_str = "\nWaiting for the other player to be synchronized..."
+    arrived_synchro_str = "\nThe other player arrived. Starting party information trading..."
+    transfer_to_hardware_str = "\rSection {index}: {completion}"
+    restart_trade_str = "\nStarting a new trade."
+    separate_section_str = "\n"
     buffered_negotiation_str = '\nThe other player wants to do a {other_buffered} trade.\nWould you like to switch to a {other_buffered} trade?'
     buffered_other_negotiation_str = "\nAsking the other player whether they're willing to do a {own_buffered} trade..."
     buffered_chosen_str = "\nDecided to do a {own_buffered} trade."
     received_buffered_data_str = "\nReceived the trade data from the other player!\nYou can now start the real trade."
+    no_recycle_data_str = "\nBoth players' input is required.\nRestarting the trade from scratch."
+    no_move_other_data_str = "\nThe other player's input was not required.\nSkipping receiving their moves data."
+    reuse_data_str = "\nReusing the other player's trade data."
+    move_other_data_str = "\nThe other player's input was required.\nWaiting for their updated moves data..."
+    send_move_other_data_str = "\nSending your updated moves data to the other player."
+    no_mail_other_data_str = "\nThe other player's party has no mail.\nSkipping receiving their mail data."
+    mail_other_data_str = "\nThe other player's party has mail.\nWaiting for them to send it."
+    send_mail_other_data_str = "\nSending your mail data to the other player."
+    pool_receive_data_str = "\nGetting the Pool's trade offer..."
+    pool_recycle_data_str = "\nReusing the previous Pool's trade offer..."
     two_player_trade_str = "2P"
     pool_trade_str = "PS"
+    accepted_str = "Accept"
+    decline_str = "Decline"
     yes_no_str = 'Choice (y = Yes, n=No): '
     action_str = "\nInput the action's number: "
     server_str = "Server: "
@@ -62,6 +94,23 @@ class GSCTradingStrings:
                             "7) Host for emulator connection: {emulator_host}\n"
                             "8) Port for emulator connection: {emulator_port}"
                             )
+    
+    def int_to_three_str(integer):
+        ret = ""
+        if integer < 100:
+            ret += " "
+        if integer < 10:
+            ret += " "
+        ret += str(integer)
+        return ret
+    
+    def x_out_of_y_str(x, y):
+        return GSCTradingStrings.int_to_three_str(x) + "/" + GSCTradingStrings.int_to_three_str(y)
+
+    def get_accepted_str(is_decline):
+        if is_decline:
+            return GSCTradingStrings.decline_str
+        return GSCTradingStrings.accepted_str
 
     def get_buffered_str(buffered):
         if buffered:

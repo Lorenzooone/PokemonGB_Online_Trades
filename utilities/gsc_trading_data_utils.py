@@ -332,6 +332,10 @@ class GSCUtilsMisc:
             return data
         return default_data
     
+    def verbose_print(to_print, verbose, end='\n'):
+        if verbose:
+            print(to_print, end=end)
+    
 class GSCTradingText:
     """
     Class which contains a text entry from the trading data.

@@ -64,13 +64,13 @@ class GSCTradingListener:
     
     def connection_normal_sender(self, req_type, connection):
         """
-        Sends the data if it's there.
+        Sends the data, if it's there.
         """
         connection.send(self.prepare_send_data(req_type, self.send_dict[req_type]))
     
     def connection_prepare_sender(self, req_type):
         """
-        Prepares the data which will be sent if it's there.
+        Prepares the data which will be sent, if it's there.
         """
         return self.prepare_send_data(req_type, self.send_dict[req_type])
     

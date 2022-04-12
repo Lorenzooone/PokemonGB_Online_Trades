@@ -5,6 +5,7 @@ import timeit
 import threading
 from time import sleep
 from .gsc_trading_strings import GSCTradingStrings
+from .gsc_trading_data_utils import GSCUtilsMisc
 
 # Implements the BGB link cable protocol
 # See https://bgb.bircd.org/bgblink.html
@@ -57,6 +58,12 @@ class BGBLinkCableServer(threading.Thread):
         self.port = menu.emulator[1]
         self.kill_function = kill_function
         self.to_send = None
+    
+    def verbose_print(self, to_print, end='\n'):
+        """
+        Print if verbose...
+        """
+        GSCUtilsMisc.verbose_print(to_print, self.verbose, end=end)
 
     def get_curr_timestamp(self):
         return int(timeit.default_timer()*(2**21)) & 0x7FFFFFFF
@@ -77,12 +84,10 @@ class BGBLinkCableServer(threading.Thread):
                 self.kill_function()
                     
             server.listen(1)  # One Game Boy to rule them all
-            if self.verbose:
-                print(GSCTradingStrings.bgb_listening_str.format(host=self.host, port=self.port))
+            self.verbose_print(GSCTradingStrings.bgb_listening_str.format(host=self.host, port=self.port))
 
             connection, client_addr = server.accept()
-            if self.verbose:
-                print(GSCTradingStrings.bgb_server_str.format(host=client_addr[0], port=client_addr[1]))
+            self.verbose_print(GSCTradingStrings.bgb_server_str.format(host=client_addr[0], port=client_addr[1]))
 
             with connection:
                 try:
@@ -196,8 +201,7 @@ class BGBLinkCableServer(threading.Thread):
         # Ack/echo
         if b2 == 1:
             if not self.can_go:
-                if self.verbose:
-                    print("Go!")
+                self.verbose_print("Go!")
                 self.can_go = True
             self._client_data_handler(0)
         else:
