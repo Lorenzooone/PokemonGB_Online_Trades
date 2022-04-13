@@ -344,19 +344,23 @@ class GSCTradingText:
     def __init__(self, data, start, length=0xB, data_start=0):
         self.values = data[start:start+length]
         self.start_at = data_start
+        self.utils_class = self.get_utils_class()
+    
+    def get_utils_class(self):
+        return GSCUtils
     
     def values_equal(self, other):
         """
         :param other: Bytes, to be compared to the ones from its own values.
         """
         for i in range(len(self.values)):
-            if self.values[i] == GSCUtils.end_of_line and (i >= len(other) or other[i] == GSCUtils.end_of_line):
+            if self.values[i] == self.utils_class.end_of_line and (i >= len(other) or other[i] == self.utils_class.end_of_line):
                 return True
             if i >= len(other):
                 return False
             if self.values[i] != other[i]:
                 return False
-        if len(other) == len(self.values) or other[len(self.values)] == GSCUtils.end_of_line:
+        if len(other) == len(self.values) or other[len(self.values)] == self.utils_class.end_of_line:
             return True
         return False
     
@@ -365,21 +369,21 @@ class GSCTradingPartyInfo:
     Class which contains information about the party size and species
     from the trading data.
     """
-    gsc_max_party_mons = 6
+    max_party_mons = 6
     
     def __init__(self, data, start):
         self.total = data[start]
         if self.total <= 0 or self.total > 6:
             self.total = 1
-        self.actual_mons = data[start + 1:start + 1 + self.gsc_max_party_mons]
+        self.actual_mons = data[start + 1:start + 1 + self.max_party_mons]
     
     def get_id(self, pos):
-        if pos >= self.get_total() or pos >= self.gsc_max_party_mons:
+        if pos >= self.get_total() or pos >= self.max_party_mons:
             return None
         return self.actual_mons[pos]
     
     def set_id(self, pos, val):
-        if pos < self.get_total() and pos < self.gsc_max_party_mons:
+        if pos < self.get_total() and pos < self.max_party_mons:
             self.actual_mons[pos] = val
     
     def get_total(self):
@@ -394,7 +398,6 @@ class GSCTradingPokémonInfo:
     nickname_len = 0xB
     mail_len = 0x21
     sender_len = 0xE
-    _precalced_lengths = None
     
     no_moves_equality_ranges = [range(0,2), range(6,0x17), range(0x1B, pokemon_data_len)]
     no_moves_equality_weak_ranges = [range(0,2), range(6,0x17), range(0x1B, 0x20), range(0x24, pokemon_data_len)]
@@ -404,37 +407,37 @@ class GSCTradingPokémonInfo:
         self.values = data[start:start+length]
         self.mail = None
         self.mail_sender = None
-        GSCTradingPokémonInfo.prepare_precalced_lengths()
+        self._precalced_lengths = GSCUtilsMisc.calc_divide_lengths(self.all_lengths)
+        self.utils_class = self.get_utils_class()
+    
+    def get_utils_class(self):
+        return GSCUtils
 
     def add_ot_name(self, data, start):
-        self.ot_name = GSCTradingText(data, start, length=GSCTradingPokémonInfo.ot_name_len)
+        self.ot_name = GSCTradingText(data, start, length=self.ot_name_len)
 
     def add_nickname(self, data, start):
-        self.nickname = GSCTradingText(data, start, length=GSCTradingPokémonInfo.nickname_len)
+        self.nickname = GSCTradingText(data, start, length=self.nickname_len)
 
     def add_mail(self, data, start):
-        self.mail = GSCTradingText(data, start, length=GSCTradingPokémonInfo.mail_len)
+        self.mail = GSCTradingText(data, start, length=self.mail_len)
         
     def add_mail_sender(self, data, start):
-        self.mail_sender = GSCTradingText(data, start, length=GSCTradingPokémonInfo.sender_len, data_start=4)
+        self.mail_sender = GSCTradingText(data, start, length=self.sender_len, data_start=4)
     
     def is_nicknamed(self):
-        return not self.nickname.values_equal(GSCUtils.pokemon_names_gs[self.get_species()])
+        return not self.nickname.values_equal(self.utils_class.pokemon_names_gs[self.get_species()])
     
     def get_species(self):
         return self.values[0]
-        
-    def prepare_precalced_lengths():
-        if GSCTradingPokémonInfo._precalced_lengths is None:
-            GSCTradingPokémonInfo._precalced_lengths = GSCUtilsMisc.calc_divide_lengths(GSCTradingPokémonInfo.all_lengths)
     
     def learnable_moves(self):
         """
         Returns the moves the pokémon could learn at its current level.
         """
-        if self.get_species() in GSCUtils.learnsets.keys():
-            if self.get_level() in GSCUtils.learnsets[self.get_species()].keys():
-                return GSCUtils.learnsets[self.get_species()][self.get_level()]
+        if self.get_species() in self.utils_class.learnsets.keys():
+            if self.get_level() in self.utils_class.learnsets[self.get_species()].keys():
+                return self.utils_class.learnsets[self.get_species()][self.get_level()]
         return None
     
     def set_species(self, data):
@@ -470,7 +473,7 @@ class GSCTradingPokémonInfo:
     def set_move(self, pos, val, max_pp=True):
         self.values[2 + pos] = val
         if max_pp:
-            self.set_pp(pos, GSCUtils.moves_pp_list[val])
+            self.set_pp(pos, self.utils_class.moves_pp_list[val])
     
     def set_pp(self, pos, val):
         self.values[0x17 + pos] = val
@@ -488,7 +491,7 @@ class GSCTradingPokémonInfo:
         old_max_hps = self.get_max_hp()
         old_current_hps = self.get_curr_hp()
         for i in range(6):
-            GSCUtilsMisc.write_short(self.values, 0x24 + (i * 2), GSCUtils.stat_calculation(i, self.get_species(), self.get_ivs(), self.get_stat_exp(), self.get_level()))
+            GSCUtilsMisc.write_short(self.values, 0x24 + (i * 2), self.utils_class.stat_calculation(i, self.get_species(), self.get_ivs(), self.get_stat_exp(), self.get_level()))
         new_max_hps = self.get_max_hp()
         old_current_hps += new_max_hps-old_max_hps
         GSCUtilsMisc.write_short(self.values, 0x22, min(old_current_hps, new_max_hps))
@@ -513,12 +516,12 @@ class GSCTradingPokémonInfo:
         return GSCUtilsMisc.read_short(self.values, 0x24)
     
     def has_mail(self):
-        return GSCUtils.is_item_mail(self.get_item())
+        return self.utils_class.is_item_mail(self.get_item())
     
     def is_equal(self, other, weak=False):
-        ranges = GSCTradingPokémonInfo.no_moves_equality_ranges
+        ranges = self.no_moves_equality_ranges
         if weak:
-            ranges = GSCTradingPokémonInfo.no_moves_equality_weak_ranges
+            ranges = self.no_moves_equality_weak_ranges
         for i in ranges:
             for j in i:
                 if self.values[j] != other.values[j]:
@@ -598,61 +601,66 @@ class GSCTradingPokémonInfo:
         """
         Returns all the data used to represent this pokemon.
         """
-        GSCTradingPokémonInfo.prepare_precalced_lengths()
         sources = [self, self.ot_name, self.nickname]
         mail_sources = [self.mail, self.mail_sender]
-        data = [0] * GSCTradingPokémonInfo._precalced_lengths[len(sources)+len(mail_sources)]
+        data = [0] * self._precalced_lengths[len(sources)+len(mail_sources)]
         for i in range(len(sources)):
-            GSCUtilsMisc.copy_to_data(data, GSCTradingPokémonInfo._precalced_lengths[i], sources[i].values)
+            GSCUtilsMisc.copy_to_data(data, self._precalced_lengths[i], sources[i].values)
         if self.has_mail():
             for i in range(len(mail_sources)):
-                GSCUtilsMisc.copy_to_data(data, GSCTradingPokémonInfo._precalced_lengths[i+len(sources)], mail_sources[i].values)
+                GSCUtilsMisc.copy_to_data(data, self._precalced_lengths[i+len(sources)], mail_sources[i].values)
         return data
 
     def set_data(data):
         """
         Creates an entry from the given data.
         """
-        GSCTradingPokémonInfo.prepare_precalced_lengths()
-        mon = GSCTradingPokémonInfo(data, GSCTradingPokémonInfo._precalced_lengths[0])
-        mon.add_ot_name(data, GSCTradingPokémonInfo._precalced_lengths[1])
-        mon.add_nickname(data, GSCTradingPokémonInfo._precalced_lengths[2])
+        mon = GSCTradingPokémonInfo(data, 0)
+        mon.add_ot_name(data, mon._precalced_lengths[1])
+        mon.add_nickname(data, mon._precalced_lengths[2])
         if mon.has_mail():
-            mon.add_mail(data, GSCTradingPokémonInfo._precalced_lengths[3])
-            mon.add_mail_sender(data, GSCTradingPokémonInfo._precalced_lengths[4])
+            mon.add_mail(data, mon._precalced_lengths[3])
+            mon.add_mail_sender(data, mon._precalced_lengths[4])
         return mon
 
 class GSCTradingData:
     """
     Class which contains all the informations about a trader's party.
     """
-    gsc_trader_name_pos = 0
-    gsc_trading_party_info_pos = 0xB
-    gsc_trader_info_pos = 0x13
-    gsc_trading_pokemon_pos = 0x15
-    gsc_trading_pokemon_ot_pos = 0x135
-    gsc_trading_pokemon_nickname_pos = 0x177
-    gsc_trading_pokemon_mail_pos = 0xCB
-    gsc_trading_pokemon_mail_sender_pos = 0x191
+    trader_name_pos = 0
+    trading_party_info_pos = 0xB
+    trader_info_pos = 0x13
+    trading_pokemon_pos = 0x15
+    trading_pokemon_ot_pos = 0x135
+    trading_pokemon_nickname_pos = 0x177
+    trading_pokemon_mail_pos = 0xCB
+    trading_pokemon_mail_sender_pos = 0x191
     
-    gsc_trading_pokemon_length = 0x30
-    gsc_trading_name_length = 0xB
-    gsc_trading_mail_length = 0x21
-    gsc_trading_mail_sender_length = 0xE
+    trading_pokemon_length = 0x30
+    trading_name_length = 0xB
+    trading_mail_length = 0x21
+    trading_mail_sender_length = 0xE
     
     def __init__(self, data_pokemon, data_mail=None, do_full=True):
-        self.trader = GSCTradingText(data_pokemon, self.gsc_trader_name_pos)
-        self.party_info = GSCTradingPartyInfo(data_pokemon, self.gsc_trading_party_info_pos)
-        self.trader_info = GSCUtilsMisc.read_short(data_pokemon, self.gsc_trader_info_pos)
+        self.utils_class = self.get_utils_class()
+        self.trader = GSCTradingText(data_pokemon, self.trader_name_pos)
+        self.party_info = GSCTradingPartyInfo(data_pokemon, self.trading_party_info_pos)
+        self.trader_info = GSCUtilsMisc.read_short(data_pokemon, self.trader_info_pos)
         self.pokemon = []
         if do_full:
             for i in range(self.get_party_size()):
-                self.pokemon += [GSCTradingPokémonInfo(data_pokemon, self.gsc_trading_pokemon_pos + i * self.gsc_trading_pokemon_length)]
-                self.pokemon[i].add_ot_name(data_pokemon, self.gsc_trading_pokemon_ot_pos + i * self.gsc_trading_name_length)
-                self.pokemon[i].add_nickname(data_pokemon, self.gsc_trading_pokemon_nickname_pos + i * self.gsc_trading_name_length)
+                self.pokemon += [self.mon_generator(data_pokemon, self.trading_pokemon_pos + i * self.trading_pokemon_length)]
+                self.pokemon[i].add_ot_name(data_pokemon, self.trading_pokemon_ot_pos + i * self.trading_name_length)
+                self.pokemon[i].add_nickname(data_pokemon, self.trading_pokemon_nickname_pos + i * self.trading_name_length)
                 if data_mail is not None and self.pokemon[i].has_mail():
-                    self.pokemon[i].add_mail(data_mail, self.gsc_trading_pokemon_mail_pos + i * self.gsc_trading_mail_length)
-                    self.pokemon[i].add_mail_sender(data_mail, self.gsc_trading_pokemon_mail_sender_pos + i * self.gsc_trading_mail_sender_length)
+                    self.pokemon[i].add_mail(data_mail, self.trading_pokemon_mail_pos + i * self.trading_mail_length)
+                    self.pokemon[i].add_mail_sender(data_mail, self.trading_pokemon_mail_sender_pos + i * self.trading_mail_sender_length)
+    
+    def mon_generator(self, data, pos):
+        return GSCTradingPokémonInfo(data, pos)
+    
+    def get_utils_class(self):
+        return GSCUtils
 
     def check_pos_validity(func):
         def wrapper(*args, **kwargs):
@@ -686,7 +694,7 @@ class GSCTradingData:
 
     @check_pos_validity
     def is_mon_egg(self, pos):
-        return self.party_info.get_id(pos) == GSCUtils.egg_id
+        return self.party_info.get_id(pos) == self.utils_class.egg_id
 
     def party_has_mail(self):
         mail_owned = False
@@ -702,14 +710,14 @@ class GSCTradingData:
         Returns True if it evolved and player input is required.
         Returns False if it evolved and no player input is required.
         """
-        evolution = GSCUtils.get_evolution(self.pokemon[pos].get_species(), self.pokemon[pos].get_item())
+        evolution = self.utils_class.get_evolution(self.pokemon[pos].get_species(), self.pokemon[pos].get_item())
         if evolution is None:
             return None
-        evo_item = GSCUtils.get_evolution_item(self.pokemon[pos].get_species())
+        evo_item = self.utils_class.get_evolution_item(self.pokemon[pos].get_species())
         if evo_item is not None:
             self.pokemon[pos].set_item()
         if not self.pokemon[pos].is_nicknamed():
-            self.pokemon[pos].add_nickname(GSCUtils.pokemon_names_gs[evolution], 0)
+            self.pokemon[pos].add_nickname(self.utils_class.pokemon_names_gs[evolution], 0)
         self.pokemon[pos].set_species(evolution)
         self.party_info.set_id(pos, self.pokemon[pos].get_species())
         self.pokemon[pos].update_stats()
@@ -757,19 +765,19 @@ class GSCTradingData:
         data = []
         for i in range(2):
             data += [lengths[i]*[0]]
-        data += [GSCUtils.no_mail_section[:len(GSCUtils.no_mail_section)]]
-        GSCUtilsMisc.copy_to_data(data[1], self.gsc_trader_name_pos, self.trader.values)
-        data[1][self.gsc_trading_party_info_pos] = self.get_party_size()
-        GSCUtilsMisc.copy_to_data(data[1], self.gsc_trading_party_info_pos + 1, self.party_info.actual_mons)
+        data += [self.utils_class.no_mail_section[:len(self.utils_class.no_mail_section)]]
+        GSCUtilsMisc.copy_to_data(data[1], self.trader_name_pos, self.trader.values)
+        data[1][self.trading_party_info_pos] = self.get_party_size()
+        GSCUtilsMisc.copy_to_data(data[1], self.trading_party_info_pos + 1, self.party_info.actual_mons)
         data[1][0x12] = 0xFF
-        GSCUtilsMisc.write_short(data[1], self.gsc_trader_info_pos, self.trader_info)
+        GSCUtilsMisc.write_short(data[1], self.trader_info_pos, self.trader_info)
         for i in range(self.get_party_size()):
-            GSCUtilsMisc.copy_to_data(data[1], self.gsc_trading_pokemon_pos + (i * self.gsc_trading_pokemon_length), self.pokemon[i].values)
-            GSCUtilsMisc.copy_to_data(data[1], self.gsc_trading_pokemon_ot_pos + (i * self.gsc_trading_name_length), self.pokemon[i].ot_name.values)
-            GSCUtilsMisc.copy_to_data(data[1], self.gsc_trading_pokemon_nickname_pos + (i * self.gsc_trading_name_length), self.pokemon[i].nickname.values)
+            GSCUtilsMisc.copy_to_data(data[1], self.trading_pokemon_pos + (i * self.trading_pokemon_length), self.pokemon[i].values)
+            GSCUtilsMisc.copy_to_data(data[1], self.trading_pokemon_ot_pos + (i * self.trading_name_length), self.pokemon[i].ot_name.values)
+            GSCUtilsMisc.copy_to_data(data[1], self.trading_pokemon_nickname_pos + (i * self.trading_name_length), self.pokemon[i].nickname.values)
             if self.pokemon[i].mail is not None:
-                GSCUtilsMisc.copy_to_data(data[2], self.gsc_trading_pokemon_mail_pos + (i * self.gsc_trading_mail_length), self.pokemon[i].mail.values)
-                GSCUtilsMisc.copy_to_data(data[2], self.gsc_trading_pokemon_mail_sender_pos + (i * self.gsc_trading_mail_sender_length), self.pokemon[i].mail_sender.values)
+                GSCUtilsMisc.copy_to_data(data[2], self.trading_pokemon_mail_pos + (i * self.trading_mail_length), self.pokemon[i].mail.values)
+                GSCUtilsMisc.copy_to_data(data[2], self.trading_pokemon_mail_sender_pos + (i * self.trading_mail_sender_length), self.pokemon[i].mail_sender.values)
         return data
     
 class GSCChecks:
@@ -789,6 +797,7 @@ class GSCChecks:
     free_value_moves = 0
     
     def __init__(self, section_sizes, do_sanity_checks):
+        self.utils_class = self.get_utils_class()
         self.do_sanity_checks = do_sanity_checks
         self.bad_ids_items = GSCUtilsLoaders.prepare_check_list(GSCUtilsMisc.read_data(self.bad_ids_items_path))
         self.bad_ids_moves = GSCUtilsLoaders.prepare_check_list(GSCUtilsMisc.read_data(self.bad_ids_moves_path))
@@ -810,10 +819,14 @@ class GSCChecks:
             self.clean_species_sp,
             self.clean_pp,
             self.clean_experience,
-            self.clean_egg_cycles_friendship
+            self.clean_egg_cycles_friendship,
+            self.clean_type
             ]
         self.checks_map = self.prepare_checks_map(GSCUtilsMisc.read_data(self.checks_map_path), section_sizes)
         self.single_pokemon_checks_map = self.prepare_basic_checks_map(GSCUtilsMisc.read_data(self.single_pokemon_checks_map_path))
+    
+    def get_utils_class(self):
+        return GSCUtils
     
     def clean_check_sanity_checks(func):
         def wrapper(*args, **kwargs):
@@ -859,13 +872,13 @@ class GSCChecks:
     
     @clean_check_sanity_checks
     def clean_level(self, level):
-        self.level = GSCUtils.get_level_exp(self.curr_species, self.exp)
+        self.level = self.utils_class.get_level_exp(self.curr_species, self.exp)
         return self.level
     
     @clean_check_sanity_checks
     def clean_experience(self, val):
         if self.curr_exp_pos == 0:
-            self.exp_range = [GSCUtils.get_exp_level(self.curr_species, GSCUtils.min_level), GSCUtils.get_exp_level(self.curr_species, GSCUtils.max_level)]
+            self.exp_range = [self.utils_class.get_exp_level(self.curr_species, self.utils_class.min_level), self.utils_class.get_exp_level(self.curr_species, self.utils_class.max_level)]
             if val >= 0x80:
                 self.negative_exp = True
         if self.negative_exp:
@@ -890,7 +903,7 @@ class GSCChecks:
     def clean_pp(self, pp):
         current_pp = pp & 0x3F
         pp_ups = (pp >> 6) & 3
-        max_base_pp = GSCUtils.moves_pp_list[self.moves[self.curr_pp]]
+        max_base_pp = self.utils_class.moves_pp_list[self.moves[self.curr_pp]]
         max_pp = max_base_pp + (math.floor(max_base_pp/5) * pp_ups)
         if max_pp > 61:
             max_pp = 61
@@ -936,7 +949,7 @@ class GSCChecks:
             self.curr_species_pos += 1
             return species
         found_species = self.clean_value(species, self.is_species_valid, 0x13)
-        if species == GSCUtils.egg_id:
+        if species == self.utils_class.egg_id:
             found_species = species
         self.curr_species_pos += 1
         return found_species
@@ -970,11 +983,15 @@ class GSCChecks:
     
     @clean_check_sanity_checks
     def clean_text_final(self, char):
-        char_val = GSCUtils.end_of_line
+        char_val = self.utils_class.end_of_line
         self.curr_text += [char_val]
         # Possibility to put bad words filters here
         self.prepare_text_buffer()
         return char_val
+    
+    @clean_check_sanity_checks
+    def clean_type(self, typing):
+        return typing
 
     def check_range(self, stat_range, curr_stat):
         if curr_stat > stat_range[1]:
@@ -987,10 +1004,10 @@ class GSCChecks:
     def check_stat(self, val, zero_min=False):
         if self.curr_pos == 0:
             self.stat = 0
-            min_stat = GSCUtils.stat_calculation(self.curr_stat_id, self.curr_species, self.iv, self.stat_exp, self.level, do_exp=False)
+            min_stat = self.utils_class.stat_calculation(self.curr_stat_id, self.curr_species, self.iv, self.stat_exp, self.level, do_exp=False)
             if zero_min:
                 min_stat = 0
-            self.stat_range = [min_stat, GSCUtils.stat_calculation(self.curr_stat_id, self.curr_species, self.iv, self.stat_exp, self.level)]
+            self.stat_range = [min_stat, self.utils_class.stat_calculation(self.curr_stat_id, self.curr_species, self.iv, self.stat_exp, self.level)]
         curr_read_val = val << (8 * (1 - (self.curr_pos & 1)))
         self.stat = self.check_range(self.stat_range, (self.stat & 0xFF00) | curr_read_val)
         val = (self.stat >> (8 * (1 - (self.curr_pos & 1)))) & 0xFF

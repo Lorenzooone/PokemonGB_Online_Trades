@@ -65,9 +65,9 @@ class PoolTradeServer:
     """
     Class which handles the pool trading part.
     """
-    gsc_accept_trade = 0x72
-    gsc_decline_trade = 0x71
-    gsc_success_value = 0x91
+    accept_trade = 0x72
+    decline_trade = 0x71
+    success_value = 0x91
     
     def __init__(self):
         self.checks = GSCChecks([0,0,0], True)
@@ -83,14 +83,14 @@ class PoolTradeServer:
         self.received_accepted = None
         self.received_success = None
         self.get_handlers = {
-            GSCTradingClient.gsc_pool_transfer: self.handle_get_pool,
-            GSCTradingClient.gsc_accept_transfer: self.handle_get_accepted,
-            GSCTradingClient.gsc_success_transfer: self.handle_get_success
+            GSCTradingClient.pool_transfer: self.handle_get_pool,
+            GSCTradingClient.accept_transfer: self.handle_get_accepted,
+            GSCTradingClient.success_transfer: self.handle_get_success
         }
         self.send_handlers = {
-            GSCTradingClient.gsc_choice_transfer: self.handle_recv_mon,
-            GSCTradingClient.gsc_accept_transfer: self.handle_recv_accepted,
-            GSCTradingClient.gsc_success_transfer: self.handle_recv_success
+            GSCTradingClient.choice_transfer: self.handle_recv_mon,
+            GSCTradingClient.accept_transfer: self.handle_recv_accepted,
+            GSCTradingClient.success_transfer: self.handle_recv_success
         }
     
     async def process(self, data, connection):
@@ -123,7 +123,7 @@ class PoolTradeServer:
             self.mon_index = None
             self.clear_pool = False
         self.mon_index, mon = ServerUtils.get_mon_index(self.mon_index)
-        return self.hll.prepare_send_data(GSCTradingClient.gsc_pool_transfer, [self.own_id] + GSCUtils.single_mon_to_data(mon[0], mon[1]))
+        return self.hll.prepare_send_data(GSCTradingClient.pool_transfer, [self.own_id] + GSCUtils.single_mon_to_data(mon[0], mon[1]))
     
     def handle_get_accepted(self):
         """
@@ -139,10 +139,10 @@ class PoolTradeServer:
             if self.last_accepted is None or self.last_accepted != self.received_accepted[0]:
                 self.last_accepted = self.received_accepted[0]
                 self.own_id = GSCUtilsMisc.inc_byte(self.own_id)
-            if self.received_accepted[1] == PoolTradeServer.gsc_accept_trade and self.received_mon[1] is not None:
-                return self.hll.prepare_send_data(GSCTradingClient.gsc_accept_transfer, [self.own_id] + [PoolTradeServer.gsc_accept_trade])
+            if self.received_accepted[1] == PoolTradeServer.accept_trade and self.received_mon[1] is not None:
+                return self.hll.prepare_send_data(GSCTradingClient.accept_transfer, [self.own_id] + [PoolTradeServer.accept_trade])
             else:
-                return self.hll.prepare_send_data(GSCTradingClient.gsc_accept_transfer, [self.own_id] + [PoolTradeServer.gsc_decline_trade])
+                return self.hll.prepare_send_data(GSCTradingClient.accept_transfer, [self.own_id] + [PoolTradeServer.decline_trade])
         return None
     
     def handle_get_success(self):
@@ -162,7 +162,7 @@ class PoolTradeServer:
                 mons[self.mon_index] = self.received_mon[1]
                 ServerUtils.save_mons()
                 in_use_mons.remove(self.mon_index)
-            return self.hll.prepare_send_data(GSCTradingClient.gsc_success_transfer, [self.own_id] + [PoolTradeServer.gsc_success_value])
+            return self.hll.prepare_send_data(GSCTradingClient.success_transfer, [self.own_id] + [PoolTradeServer.success_value])
         return None
 
     def check_retransmits(self, counter=1):
@@ -171,13 +171,13 @@ class PoolTradeServer:
         If not, it prepares a request for retransmission.
         """
         if self.received_mon is None or (self.received_accepted is not None and (self.received_accepted[0] != GSCUtilsMisc.inc_byte(self.received_mon[0]))):
-            return self.hll.prepare_get_data(GSCTradingClient.gsc_choice_transfer)
+            return self.hll.prepare_get_data(GSCTradingClient.choice_transfer)
         if counter > 0:
             if self.received_accepted is None or (self.received_success is not None and (self.received_success[0] != GSCUtilsMisc.inc_byte(self.received_accepted[0]))):
-                return self.hll.prepare_get_data(GSCTradingClient.gsc_accept_transfer)
+                return self.hll.prepare_get_data(GSCTradingClient.accept_transfer)
         if counter > 1:
             if self.received_success is None or self.received_mon[1] is None:
-                return self.hll.prepare_get_data(GSCTradingClient.gsc_success_transfer)
+                return self.hll.prepare_get_data(GSCTradingClient.success_transfer)
         return None
     
     def handle_recv_mon(self, data):

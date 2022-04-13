@@ -10,32 +10,38 @@ class GSCTradingClient:
     to/from the other recepient.
     It uses a system of TAGs and IDs.
     """
-    gsc_full_transfer = "FLL2"
-    gsc_single_transfer = "SNG2"
-    gsc_pool_transfer = "POL2"
-    gsc_moves_transfer = "MVS2"
-    gsc_mail_transfer = "MAI2"
-    gsc_choice_transfer = "CHC2"
-    gsc_accept_transfer = "ACP2"
-    gsc_success_transfer = "SUC2"
-    gsc_buffered_transfer = "BUF2"
-    gsc_negotiation_transfer = "NEG2"
-    gsc_buffered_value = 0x85
-    gsc_not_buffered_value = 0x12
-    gsc_success_value = 0x91
+    full_transfer = "FLL2"
+    single_transfer = "SNG2"
+    pool_transfer = "POL2"
+    moves_transfer = "MVS2"
+    mail_transfer = "MAI2"
+    choice_transfer = "CHC2"
+    accept_transfer = "ACP2"
+    success_transfer = "SUC2"
+    buffered_transfer = "BUF2"
+    negotiation_transfer = "NEG2"
+    buffered_value = 0x85
+    not_buffered_value = 0x12
+    success_value = 0x91
     max_message_id = 255
     max_negotiation_id = 255
     
-    def __init__(self, trader, connection, verbose, base_no_trade = "useful_data/base.bin", base_pool = "useful_data/base_pool.bin"):
+    def __init__(self, trader, connection, verbose, stop_trade, party_reader, base_no_trade = "useful_data/base.bin", base_pool = "useful_data/base_pool.bin"):
         self.fileBaseTargetName = base_no_trade
         self.fileBasePoolTargetName = base_pool
         self.connection = connection.hll
+        self.stop_trade = stop_trade
         self.received_one = False
+        self.party_reader = party_reader
         self.verbose = verbose
-        self.connection.prepare_listener(GSCTradingClient.gsc_full_transfer, self.on_get_big_trading_data)
+        self.connection.prepare_listener(self.full_transfer, self.on_get_big_trading_data)
         self.trader = trader
         self.own_id = None
         self.other_id = None
+        self.utils_class = self.get_utils_class()
+        
+    def get_utils_class(self):
+        return GSCUtils
     
     def verbose_print(self, to_print, end='\n'):
         """
@@ -47,25 +53,25 @@ class GSCTradingClient:
         """
         Handles getting the mail data when only the other player has mail.
         """
-        return self.connection.recv_data(GSCTradingClient.gsc_mail_transfer)
+        return self.connection.recv_data(self.mail_transfer)
         
     def send_mail_data_only(self, data):
         """
         Handles sending the mail data when the other player has no mail.
         """
-        self.connection.send_data(GSCTradingClient.gsc_mail_transfer, data)
+        self.connection.send_data(self.mail_transfer, data)
     
     def get_success(self):
         """
         Handles getting the success trade confirmation value.
         """
-        return self.get_single_byte(GSCTradingClient.gsc_success_transfer)
+        return self.get_single_byte(self.success_transfer)
         
     def send_success(self):
         """
         Handles sending the success trade confirmation value.
         """
-        self.send_single_byte(GSCTradingClient.gsc_success_transfer, GSCTradingClient.gsc_success_value)
+        self.send_single_byte(self.success_transfer, self.success_value)
     
     def get_move_data_only(self):
         """
@@ -73,7 +79,7 @@ class GSCTradingClient:
         has user input.
         It also loads it into the correct pokémon.
         """
-        val = self.connection.recv_data(GSCTradingClient.gsc_moves_transfer)
+        val = self.connection.recv_data(self.moves_transfer)
         if val is not None:
             for i in range(4):
                 self.trader.other_pokemon.pokemon[self.trader.other_pokemon.get_last_mon_index()].set_move(i, val[i], max_pp=False)
@@ -90,7 +96,7 @@ class GSCTradingClient:
         for i in range(4):
             val[i] = self.trader.own_pokemon.pokemon[self.trader.own_pokemon.get_last_mon_index()].get_move(i)
             val[4+i] = self.trader.own_pokemon.pokemon[self.trader.own_pokemon.get_last_mon_index()].get_pp(i)
-        self.connection.send_data(GSCTradingClient.gsc_moves_transfer, val)
+        self.connection.send_data(self.moves_transfer, val)
     
     def send_with_counter(self, dest, data):
         """
@@ -98,7 +104,7 @@ class GSCTradingClient:
         """
         if self.own_id is None:
             r = Random()
-            self.own_id = r.randint(0, GSCTradingClient.max_message_id)
+            self.own_id = r.randint(0, self.max_message_id)
         else:
             self.own_id = GSCUtilsMisc.inc_byte(self.own_id)
         self.connection.send_data(dest, [self.own_id] + data)
@@ -140,13 +146,13 @@ class GSCTradingClient:
         Handles getting whether the other player wants to do the trade
         or not.
         """
-        return self.get_single_byte(GSCTradingClient.gsc_accept_transfer)
+        return self.get_single_byte(self.accept_transfer)
                 
     def send_accepted(self, choice):
         """
         Handles sending whether the player wants to do the trade or not.
         """
-        self.send_single_byte(GSCTradingClient.gsc_accept_transfer, choice)
+        self.send_single_byte(self.accept_transfer, choice)
                 
     def get_chosen_mon(self):
         """
@@ -159,19 +165,19 @@ class GSCTradingClient:
         between consecutive tries.
         """
         valid = True
-        ret = self.get_with_counter(GSCTradingClient.gsc_choice_transfer)
+        ret = self.get_with_counter(self.choice_transfer)
         
         if ret is not None:
             # Gets the failsafe value. If the sanity checks are on,
             # it cleans it too
             base_index = self.trader.convert_choice(ret[0])
-            if ret[0] != GSCTrading.gsc_stop_trade:
+            if ret[0] != self.stop_trade:
                 if self.trader.checks.do_sanity_checks and base_index >= self.trader.other_pokemon.get_party_size():
                     base_index = self.trader.other_pokemon.get_last_mon_index()
                 
                 # Loads the mon and checks that it hasn't changed too much
                 actual_data = ret[1:]
-                mon = GSCUtils.single_mon_from_data(self.trader.checks, actual_data)
+                mon = self.utils_class.single_mon_from_data(self.trader.checks, actual_data)
                 
                 if mon is not None:    
                     # Searches for the pokémon. If it's not found, it uses
@@ -199,10 +205,10 @@ class GSCTradingClient:
         """
         index = self.trader.convert_choice(choice)
         own_mon = []
-        if choice != GSCTrading.gsc_stop_trade:
+        if choice != self.stop_trade:
             if index < self.trader.own_pokemon.get_party_size():
-                own_mon = GSCUtils.single_mon_to_data(self.trader.own_pokemon.pokemon[index], self.trader.own_pokemon.is_mon_egg(index))
-        self.send_with_counter(GSCTradingClient.gsc_choice_transfer, [choice] + own_mon)
+                own_mon = self.utils_class.single_mon_to_data(self.trader.own_pokemon.pokemon[index], self.trader.own_pokemon.is_mon_egg(index))
+        self.send_with_counter(self.choice_transfer, [choice] + own_mon)
     
     def on_get_big_trading_data(self):
         """
@@ -216,8 +222,8 @@ class GSCTradingClient:
         """
         Make it so if we need to resend stuff, the buffers are clean.
         """
-        self.connection.reset_send(GSCTradingClient.gsc_full_transfer)
-        self.connection.reset_recv(GSCTradingClient.gsc_full_transfer)
+        self.connection.reset_send(self.full_transfer)
+        self.connection.reset_recv(self.full_transfer)
         self.received_one = False
         
     def get_big_trading_data(self, lengths):
@@ -228,7 +234,7 @@ class GSCTradingClient:
         closing that trade.
         """
         success = True
-        data = self.connection.recv_data(GSCTradingClient.gsc_full_transfer)
+        data = self.connection.recv_data(self.full_transfer)
         if data is None:
             success = False
             data = GSCUtilsLoaders.load_trading_data(self.fileBaseTargetName, lengths)
@@ -240,20 +246,20 @@ class GSCTradingClient:
         """
         Handles sending the player's entire trading data.
         """
-        self.connection.send_data(GSCTradingClient.gsc_full_transfer, data[0]+data[1]+data[2])
+        self.connection.send_data(self.full_transfer, data[0]+data[1]+data[2])
         
     def get_pool_trading_data(self):
         """
         Handles getting the trading data for the mon offered by the server.
         """
-        mon = self.get_with_counter(GSCTradingClient.gsc_pool_transfer)
+        mon = self.get_with_counter(self.pool_transfer)
         if mon is not None:
             # Applies the checks to the received data.
-            received_mon = GSCUtils.single_mon_from_data(self.trader.checks, mon)
+            received_mon = self.utils_class.single_mon_from_data(self.trader.checks, mon)
                 
             if received_mon is not None:
                 # Insert the received mon into a pre-baked party
-                mon = GSCTradingData(GSCUtilsMisc.read_data(self.fileBasePoolTargetName), do_full=False)
+                mon = self.party_reader(GSCUtilsMisc.read_data(self.fileBasePoolTargetName), do_full=False)
                 mon.pokemon += [received_mon[0]]
                 
                 # Specially handle the egg party IDs
@@ -265,33 +271,33 @@ class GSCTradingClient:
         """
         Handles getting the other player's current bytes of trading data.
         """
-        return self.connection.recv_data(GSCTradingClient.gsc_single_transfer)
+        return self.connection.recv_data(self.single_transfer)
 
     def send_trading_data(self, data):
         """
         Handles sending the player's current bytes of trading data.
         """
-        self.connection.send_data(GSCTradingClient.gsc_single_transfer, data)
+        self.connection.send_data(self.single_transfer, data)
     
     def send_buffered_data(self, buffered):
         """
         Handles sending the client's choice for the type of trade.
         """
-        val = GSCTradingClient.gsc_not_buffered_value
+        val = self.not_buffered_value
         if buffered:
-            val = GSCTradingClient.gsc_buffered_value
-        self.send_single_byte(GSCTradingClient.gsc_buffered_transfer, val)
+            val = self.buffered_value
+        self.send_single_byte(self.buffered_transfer, val)
     
     def get_buffered_data(self):
         """
         Handles getting the other client's choice for the type of trade.
         """
         buffered = None
-        val = self.get_single_byte(GSCTradingClient.gsc_buffered_transfer)
+        val = self.get_single_byte(self.buffered_transfer)
         if val is not None:
-            if val == GSCTradingClient.gsc_buffered_value:
+            if val == self.buffered_value:
                 buffered = True
-            elif val == GSCTradingClient.gsc_not_buffered_value:
+            elif val == self.not_buffered_value:
                 buffered = False
         return buffered
     
@@ -300,8 +306,8 @@ class GSCTradingClient:
         Handles sending the client's convergence value for the type of trade.
         """
         r = Random()
-        val = r.randint(0, GSCTradingClient.max_negotiation_id)
-        self.send_single_byte(GSCTradingClient.gsc_negotiation_transfer, val)
+        val = r.randint(0, self.max_negotiation_id)
+        self.send_single_byte(self.negotiation_transfer, val)
         return val
     
     def get_negotiation_data(self):
@@ -309,35 +315,45 @@ class GSCTradingClient:
         Handles getting the other client's convergence value
         for the type of trade.
         """
-        return self.get_single_byte(GSCTradingClient.gsc_negotiation_transfer)
+        return self.get_single_byte(self.negotiation_transfer)
 
 class GSCTrading:
     """
     Class which handles the trading process for the player.
     """
     sleep_timer = 0.01
-    gsc_enter_room_states = [[0x01, 0xFE, 0x61, 0xD1, 0xFE], [0xFE, 0x61, 0xD1, 0xFE, 0xFE]]
-    gsc_start_trading_states = [[0x75, 0x75, 0x76, 0xFD], [0x75, 0, 0xFD, 0xFD]]
-    gsc_max_consecutive_no_data = 0x100
-    gsc_next_section = 0xFD
-    gsc_no_input = 0xFE
-    gsc_no_data = 0
-    gsc_special_sections_len = [0xA, 0x1BC, 0x24C]
-    gsc_drop_bytes_checks = [[0xA, 0x1B9, 0x1E6], [gsc_next_section, gsc_next_section, gsc_no_input]]
-    gsc_stop_trade = 0x7F
-    gsc_first_trade_index = 0x70
-    gsc_decline_trade = 0x71
-    gsc_accept_trade = 0x72
+    enter_room_states = [[0x01, 0xFE, 0x61, 0xD1, 0xFE], [{0xFE}, {0x61}, {0xD1}, {0xFE}, {0xFE}]]
+    start_trading_states = [[0x75, 0x75, 0x76, 0xFD], [{0x75}, {0}, {0xFD}, {0xFD}]]
+    max_consecutive_no_data = 0x100
+    next_section = 0xFD
+    no_input = 0xFE
+    no_data = 0
+    special_sections_len = [0xA, 0x1BC, 0x24C]
+    drop_bytes_checks = [[0xA, 0x1B9, 0x1E6], [next_section, next_section, no_input]]
+    stop_trade = 0x7F
+    first_trade_index = 0x70
+    decline_trade = 0x71
+    accept_trade = 0x72
     
     def __init__(self, sending_func, receiving_func, connection, menu, kill_function):
         self.sendByte = sending_func
         self.receiveByte = receiving_func
-        self.checks = GSCChecks(self.gsc_special_sections_len, menu.do_sanity_checks)
-        self.comms = GSCTradingClient(self, connection, menu.verbose)
+        self.checks = self.get_checks(menu)
+        self.comms = self.get_comms(connection, menu)
         self.menu = menu
         self.kill_function = kill_function
         self.extremely_verbose = False
+        self.utils_class = self.get_and_init_utils_class()
+    
+    def get_and_init_utils_class(self):
         GSCUtils()
+        return GSCUtils
+    
+    def get_comms(self, connection, menu):
+        return GSCTradingClient(self, connection, menu.verbose, self.stop_trade, self.party_reader)
+    
+    def get_checks(self, menu):
+        return GSCChecks(self.special_sections_len, menu.do_sanity_checks)
     
     def verbose_print(self, to_print, end='\n'):
         """
@@ -356,12 +372,12 @@ class GSCTrading:
         while(sending < len(states_list[0]) - stop_to):
             next = states_list[0][sending]
             recv = self.swap_byte(next)
-            if(recv == states_list[1][sending]):
+            if(recv in states_list[1][sending]):
                 sending += 1
             elif die_on_no_data and sending == 0:
-                if  recv == self.gsc_no_data:
+                if  recv == self.no_data:
                     consecutive_no_data += 1
-                    if consecutive_no_data >= self.gsc_max_consecutive_no_data:
+                    if consecutive_no_data >= self.max_consecutive_no_data:
                         return False
                 else:
                     consecutive_no_data = 0
@@ -371,12 +387,12 @@ class GSCTrading:
         """
         Checks if the transfer dropped any bytes.
         """
-        if byte_index >= self.gsc_drop_bytes_checks[0][section_index]:
-            if byte_index < self.gsc_special_sections_len[section_index]:
-                if byte == self.gsc_drop_bytes_checks[1][section_index]:
+        if byte_index >= self.drop_bytes_checks[0][section_index]:
+            if byte_index < self.special_sections_len[section_index]:
+                if byte == self.drop_bytes_checks[1][section_index]:
                     return True
             else:
-                if byte != self.gsc_drop_bytes_checks[1][section_index]:
+                if byte != self.drop_bytes_checks[1][section_index]:
                     return True
         return False
     
@@ -397,8 +413,8 @@ class GSCTrading:
         """
         Reads a data section and sends it to the device.
         """
-        length = self.gsc_special_sections_len[index]
-        next = self.gsc_next_section
+        length = self.special_sections_len[index]
+        next = self.next_section
         
         # Prepare sanity checks stuff
         self.checks.prepare_text_buffer()
@@ -419,12 +435,12 @@ class GSCTrading:
                         found = True
                 if not found:
                     self.sleep_func()
-                    self.swap_byte(self.gsc_no_input)
+                    self.swap_byte(self.no_input)
             if index == 0:
                 self.verbose_print(GSCTradingStrings.arrived_synchro_str)
 
         # Sync with the device and start the actual trade
-        while next == self.gsc_next_section:
+        while next == self.next_section:
             next = self.swap_byte(next)
         # next now contains the first received byte from the device!
 
@@ -523,41 +539,41 @@ class GSCTrading:
         Forces a currently open trade menu to be closed.
         """
         next = 0
-        target = self.gsc_stop_trade
+        target = self.stop_trade
         while(next != target):
-            next = self.swap_byte(self.gsc_stop_trade)
-            if(target == self.gsc_stop_trade and next == target):
+            next = self.swap_byte(self.stop_trade)
+            if(target == self.stop_trade and next == target):
                 target = 0
 
     def wait_for_input(self, next):
         """
         Waits for an useful value.
         """
-        while(next == self.gsc_no_input or next == self.gsc_no_data):
-            next = self.swap_byte(self.gsc_no_input)
+        while(next == self.no_input or next == self.no_data):
+            next = self.swap_byte(self.no_input)
         return next
 
     def wait_for_no_data(self, next, resent_byte):
         """
-        Waits for gsc_no_data.
+        Waits for no_data.
         """
-        while(next != self.gsc_no_data):
+        while(next != self.no_data):
             next = self.swap_byte(resent_byte)
         return next
 
     def wait_for_no_input(self, next):
         """
-        Waits for gsc_no_input.
+        Waits for no_input.
         """
-        while(next != self.gsc_no_input):
-            next = self.swap_byte(self.gsc_no_input)
+        while(next != self.no_input):
+            next = self.swap_byte(self.no_input)
         return next
         
     def is_choice_decline(self, choice):
         """
         Checks for a trade acceptance decline.
         """
-        if choice == self.gsc_decline_trade:
+        if choice == self.decline_trade:
             return True
         return False
     
@@ -565,25 +581,25 @@ class GSCTrading:
         """
         Returns the first index as the choice.
         """
-        return self.gsc_first_trade_index, True
+        return self.first_trade_index, True
     
     def convert_choice(self, choice):
         """
         Converts the menu choice to an index.
         """
-        return choice - self.gsc_first_trade_index
+        return choice - self.first_trade_index
     
     def convert_index(self, index):
         """
         Converts the index to a menu choice.
         """
-        return index + self.gsc_first_trade_index
+        return index + self.first_trade_index
 
     def is_choice_stop(self, choice):
         """
         Checks for a request to stop the trade.
         """
-        if choice == self.gsc_stop_trade:
+        if choice == self.stop_trade:
             return True
         return False
     
@@ -596,7 +612,7 @@ class GSCTrading:
         while received is None:
             self.sleep_func()
             received = fun()
-            self.swap_byte(self.gsc_no_input)
+            self.swap_byte(self.no_input)
         return received
     
     def reset_trade(self):
@@ -633,12 +649,12 @@ class GSCTrading:
 
         while not trade_completed:
             # Get the choice
-            next = self.gsc_no_input
+            next = self.no_input
             sent_mon = self.wait_for_input(next)
 
             if not close:
                 if autoclose_on_stop and self.is_choice_stop(sent_mon):
-                    received_choice = self.gsc_stop_trade
+                    received_choice = self.stop_trade
                 else:
                     # Send it to the other player
                     self.verbose_print(GSCTradingStrings.choice_send_str)
@@ -653,7 +669,7 @@ class GSCTrading:
                     received_valid = received_data[1]
             else:
                 self.reset_trade()
-                received_choice = self.gsc_stop_trade
+                received_choice = self.stop_trade
 
             if not self.is_choice_stop(received_choice) and not self.is_choice_stop(sent_mon):
                 # Send the other player's choice to the game
@@ -667,10 +683,10 @@ class GSCTrading:
                 # Check validity of trade
                 valid_trade = received_valid
                 if not valid_trade:
-                    accepted = self.gsc_decline_trade
+                    accepted = self.decline_trade
 
                 if to_server and self.is_choice_decline(accepted):
-                    received_accepted = self.gsc_decline_trade
+                    received_accepted = self.decline_trade
                 else:
                     # Send it to the other player
                     self.verbose_print(GSCTradingStrings.accepted_send_str.format(accepted_str=GSCTradingStrings.get_accepted_str(self.is_choice_decline(accepted))))
@@ -682,7 +698,7 @@ class GSCTrading:
                 
                 # Check validity of trade (if IDs don't match, the game will refuse the trade automatically)
                 if not valid_trade:
-                    received_accepted = self.gsc_decline_trade
+                    received_accepted = self.decline_trade
                 
                 # Send the other player's choice to the game
                 next = self.swap_byte(received_accepted)
@@ -738,8 +754,11 @@ class GSCTrading:
         Makes it so the device can enter the trading room.
         """
         self.verbose_print(GSCTradingStrings.enter_trading_room_str)
-        self.send_predefined_section(self.gsc_enter_room_states)
+        self.send_predefined_section(self.enter_room_states)
         self.verbose_print(GSCTradingStrings.entered_trading_room_str)
+    
+    def party_reader(self, data, data_mail=None, do_full=True):
+        return GSCTradingData(data, data_mail=data_mail, do_full=do_full)
     
     def sit_to_table(self):
         """
@@ -747,7 +766,7 @@ class GSCTrading:
         """
         if self.exit_or_new:
             self.verbose_print(GSCTradingStrings.sit_table_str)
-        return self.send_predefined_section(self.gsc_start_trading_states, stop_to=1, die_on_no_data=True)
+        return self.send_predefined_section(self.start_trading_states, stop_to=1, die_on_no_data=True)
         
     def trade_starting_sequence(self, buffered, send_data = [None, None, None]):
         """
@@ -761,8 +780,8 @@ class GSCTrading:
         random_data, random_data_other = self.read_section(0, send_data[0], buffered)
         pokemon_data, pokemon_data_other = self.read_section(1, send_data[1], buffered)
         
-        pokemon_own = GSCTradingData(pokemon_data)
-        pokemon_other = GSCTradingData(pokemon_data_other)
+        pokemon_own = self.party_reader(pokemon_data)
+        pokemon_other = self.party_reader(pokemon_data_other)
         pokemon_own_mail = pokemon_own.party_has_mail()
         pokemon_other_mail = pokemon_other.party_has_mail()
         
@@ -770,7 +789,7 @@ class GSCTrading:
         if (pokemon_own_mail and pokemon_other_mail) or buffered:
             mail_data, mail_data_other = self.read_section(2, send_data[2], buffered)
         else:
-            send_data[2] = GSCUtils.no_mail_section
+            send_data[2] = self.utils_class.no_mail_section
             # Get mail data if only the other client has it
             if pokemon_other_mail:
                 self.verbose_print(GSCTradingStrings.mail_other_data_str)
@@ -799,9 +818,9 @@ class GSCTrading:
             # Generate the trading data for the device
             # from the other player's one and use it
             self.verbose_print(GSCTradingStrings.recycle_data_str)
-            data, data_other = self.trade_starting_sequence(True, send_data=self.other_pokemon.create_trading_data(GSCTrading.gsc_special_sections_len))
-        self.own_pokemon = GSCTradingData(data[1], data_mail=data[2])
-        self.other_pokemon = GSCTradingData(data_other[1], data_mail=data_other[2])
+            data, data_other = self.trade_starting_sequence(True, send_data=self.other_pokemon.create_trading_data(self.special_sections_len))
+        self.own_pokemon = self.party_reader(data[1], data_mail=data[2])
+        self.other_pokemon = self.party_reader(data_other[1], data_mail=data_other[2])
         return True
     
     def buffered_trade(self):
@@ -811,7 +830,7 @@ class GSCTrading:
         of another player.
         """
         if self.other_pokemon is None:
-            data, valid = self.comms.get_big_trading_data(self.gsc_special_sections_len)
+            data, valid = self.comms.get_big_trading_data(self.special_sections_len)
             if not valid:
                 self.verbose_print(GSCTradingStrings.not_received_buffered_data_str)
             else:
@@ -819,13 +838,13 @@ class GSCTrading:
         else:
             # Generate the trading data for the device
             # from the other player's one and use it
-            data = self.other_pokemon.create_trading_data(GSCTrading.gsc_special_sections_len)
+            data = self.other_pokemon.create_trading_data(self.special_sections_len)
             valid = True
             self.verbose_print(GSCTradingStrings.recycle_data_str)
         data, data_other = self.trade_starting_sequence(True, send_data=data)
         self.comms.send_big_trading_data(data)
-        self.own_pokemon = GSCTradingData(data[1], data_mail=data[2])
-        self.other_pokemon = GSCTradingData(data_other[1], data_mail=data_other[2])
+        self.own_pokemon = self.party_reader(data[1], data_mail=data[2])
+        self.other_pokemon = self.party_reader(data_other[1], data_mail=data_other[2])
         return valid
 
     def player_trade(self, buffered):
@@ -866,12 +885,12 @@ class GSCTrading:
                 # Generate the trading data for the device
                 # from the other player's one and use it
                 self.verbose_print(GSCTradingStrings.reuse_data_str)
-                data, data_other = self.trade_starting_sequence(True, send_data=self.other_pokemon.create_trading_data(GSCTrading.gsc_special_sections_len))
+                data, data_other = self.trade_starting_sequence(True, send_data=self.other_pokemon.create_trading_data(self.special_sections_len))
                 
                 # If only this client requires user inputs,
                 # send its data
                 if  self.own_blank_trade:
-                    self.own_pokemon = GSCTradingData(data[1], data_mail=data[2])
+                    self.own_pokemon = self.party_reader(data[1], data_mail=data[2])
                     self.verbose_print(GSCTradingStrings.send_move_other_data_str)
                     self.comms.send_move_data_only()
             
@@ -902,8 +921,8 @@ class GSCTrading:
                 self.other_pokemon = self.force_receive(self.comms.get_pool_trading_data)
             else:
                 self.verbose_print(GSCTradingStrings.pool_recycle_data_str)
-            data, data_other = self.trade_starting_sequence(True, send_data=self.other_pokemon.create_trading_data(GSCTrading.gsc_special_sections_len))
-            self.own_pokemon = GSCTradingData(data[1], data_mail=data[2])
+            data, data_other = self.trade_starting_sequence(True, send_data=self.other_pokemon.create_trading_data(self.special_sections_len))
+            self.own_pokemon = self.party_reader(data[1], data_mail=data[2])
 
             # Start interacting with the trading menu
             self.do_trade(self.get_first_mon, to_server=True)
