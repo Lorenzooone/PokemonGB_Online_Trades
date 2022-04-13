@@ -1,5 +1,6 @@
 from .gsc_trading import GSCTradingClient, GSCTrading
-from .rby_trading_data_utils import RBYUtils
+from .gsc_trading_strings import GSCTradingStrings
+from .rby_trading_data_utils import RBYUtils, RBYTradingData, RBYChecks
 
 class RBYTradingClient(GSCTradingClient):
     """
@@ -24,14 +25,47 @@ class RBYTradingClient(GSCTradingClient):
         
     def get_utils_class(self):
         return RBYUtils
+    
+    def get_move_data_only(self):
+        """
+        Handles getting the new move data when only the other player
+        has user input and the species of the pokémon.
+        It also loads it into the correct pokémon and evolves it if necessary.
+        """
+        val = self.connection.recv_data(self.moves_transfer)
+        if val is not None:
+            updating_mon = self.trader.other_pokemon.pokemon[self.trader.other_pokemon.get_last_mon_index()]
+            checker = self.trader.checks.moves_checks_map_path
+            for i in range(len(checker)):
+                data[i] = checker[i](data[i])
+            for i in range(4):
+                updating_mon.set_move(i, data[i+1], max_pp=False)
+                updating_mon.set_pp(i, data[i+5])
+            if data[i] != updating_mon.get_species():
+                self.trader.other_pokemon.evolution_procedure(self.trader.other_pokemon.get_last_mon_index(), data[i])
+        return val
+        
+    def send_move_data_only(self):
+        """
+        Handles sending the new move data and the species of the pokémon
+        when only the player has user input.
+        It gets it from the correct pokémon.
+        """
+        val = [0,0,0,0,0,0,0,0,0]
+        updated_mon = self.trader.own_pokemon.pokemon[self.trader.own_pokemon.get_last_mon_index()]
+        val[0] = updated_mon.get_species()
+        for i in range(4):
+            val[i+1] = updated_mon.get_move(i)
+            val[i+5] = updated_mon.get_pp(i)
+        self.connection.send_data(self.moves_transfer, val)
 
 class RBYTrading(GSCTrading):
     """
     Class which handles the trading process for the player.
     """
     
-    enter_room_states = [[0x01, 0x60, 0xD4, 0xFE], [{0x60, 0x61, 0x62, 0x63, 0x64, 0x65, 0x6F}, {0xD0, 0xD1, 0xD2, 0xD3, 0xD4}, {0xFE}, {0xFE}]]
-    start_trading_states = [[0x60, 0x60, 0xFD], [{0x60, 0x61, 0x62, 0x63, 0x64, 0x65, 0x6F}, {0}, {0xFD}]]
+    enter_room_states = [[0x01, 0x60, 0xD0, 0xD4], [{0x60, 0x61, 0x62, 0x63, 0x64, 0x65, 0x6F}, {0xD0, 0xD1, 0xD2, 0xD3, 0xD4}, {0xFE}, {0x60, 0x61, 0x62, 0x63, 0x64, 0x65, 0x6F}]]
+    start_trading_states = [[0x60, 0x60], [{0x60, 0x61, 0x62, 0x63, 0x64, 0x65, 0x6F}, {0xFD}]]
     special_sections_len = [0xA, 0x1A2, 0xC5]
     next_section = 0xFD
     no_input = 0xFE
@@ -48,6 +82,12 @@ class RBYTrading(GSCTrading):
         RBYUtils()
         return RBYUtils
     
+    def party_reader(self, data, data_mail=None, do_full=True):
+        return RBYTradingData(data, data_mail=data_mail, do_full=do_full)
+    
     def get_comms(self, connection, menu):
         return RBYTradingClient(self, connection, menu.verbose, self.stop_trade, self.party_reader)
+    
+    def get_checks(self, menu):
+        return RBYChecks(self.special_sections_len, menu.do_sanity_checks)
             

@@ -329,7 +329,7 @@ class GSCTrading:
     """
     sleep_timer = 0.01
     enter_room_states = [[0x01, 0xFE, 0x61, 0xD1, 0xFE], [{0xFE}, {0x61}, {0xD1}, {0xFE}, {0xFE}]]
-    start_trading_states = [[0x75, 0x75, 0x76, 0xFD], [{0x75}, {0}, {0xFD}, {0xFD}]]
+    start_trading_states = [[0x75, 0x75, 0x76], [{0x75}, {0}, {0xFD}]]
     max_consecutive_no_data = 0x100
     next_section = 0xFD
     no_input = 0xFE
@@ -355,6 +355,9 @@ class GSCTrading:
         GSCUtils()
         return GSCUtils
     
+    def party_reader(self, data, data_mail=None, do_full=True):
+        return GSCTradingData(data, data_mail=data_mail, do_full=do_full)
+    
     def get_comms(self, connection, menu):
         return GSCTradingClient(self, connection, menu.verbose, self.stop_trade, self.party_reader)
     
@@ -367,7 +370,7 @@ class GSCTrading:
         """
         GSCUtilsMisc.verbose_print(to_print, self.menu.verbose, end=end)
 
-    def send_predefined_section(self, states_list, stop_to=0, die_on_no_data=False):
+    def send_predefined_section(self, states_list, die_on_no_data=False):
         """
         Sends a specific and fixed section of data to the player.
         It waits for the next step until it gets to it.
@@ -375,7 +378,7 @@ class GSCTrading:
         """
         sending = 0
         consecutive_no_data = 0
-        while(sending < len(states_list[0]) - stop_to):
+        while sending < len(states_list[0]):
             next = states_list[0][sending]
             recv = self.swap_byte(next)
             if(recv in states_list[1][sending]):
@@ -763,16 +766,13 @@ class GSCTrading:
         self.send_predefined_section(self.enter_room_states)
         self.verbose_print(GSCTradingStrings.entered_trading_room_str)
     
-    def party_reader(self, data, data_mail=None, do_full=True):
-        return GSCTradingData(data, data_mail=data_mail, do_full=do_full)
-    
     def sit_to_table(self):
         """
         Handles the device sitting at the table.
         """
         if self.exit_or_new:
             self.verbose_print(GSCTradingStrings.sit_table_str)
-        return self.send_predefined_section(self.start_trading_states, stop_to=1, die_on_no_data=True)
+        return self.send_predefined_section(self.start_trading_states, die_on_no_data=True)
         
     def trade_starting_sequence(self, buffered, send_data = [None, None, None]):
         """

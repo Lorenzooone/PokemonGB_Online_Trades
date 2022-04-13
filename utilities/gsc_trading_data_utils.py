@@ -163,18 +163,18 @@ class GSCUtils:
     def get_path(self, target):
         return self.base_folder + target
     
-    def get_level_exp(species, exp):
-        start = GSCUtils.min_level
-        end = GSCUtils.max_level
-        if exp < GSCUtils.get_exp_level(species, start + 1):
+    def get_level_exp(species, exp, utils_class):
+        start = utils_class.min_level
+        end = utils_class.max_level
+        if exp < utils_class.get_exp_level(species, start + 1, utils_class):
             return start
-        if exp >= GSCUtils.get_exp_level(species, end):
+        if exp >= utils_class.get_exp_level(species, end, utils_class):
             return end
         end_search = False
         while not end_search:
             check_level = math.floor((start+end)/2)
-            level_exp = GSCUtils.get_exp_level(species, check_level)
-            next_level_exp = GSCUtils.get_exp_level(species, check_level + 1)
+            level_exp = utils_class.get_exp_level(species, check_level, utils_class)
+            next_level_exp = utils_class.get_exp_level(species, check_level + 1, utils_class)
             if exp < level_exp:
                 end = check_level
             elif exp > next_level_exp:
@@ -183,33 +183,33 @@ class GSCUtils:
                 return check_level + 1
             else:
                 return check_level
-        return GSCUtils.max_level
+        return utils_class.max_level
     
-    def get_exp_level(species, level):
-        return GSCUtils.exp_lists[GSCUtils.exp_groups[species]][level-1]
+    def get_exp_level(species, level, utils_class):
+        return utils_class.exp_lists[utils_class.exp_groups[species]][level-1]
     
-    def final_stat_calc_step(stat_id, level):
-        if stat_id != GSCUtils.hp_stat_id:
+    def final_stat_calc_step(stat_id, level, utils_class):
+        if stat_id != utils_class.hp_stat_id:
             return 5
         return level + 10
     
-    def get_iv(iv, stat_id):
-        if stat_id != GSCUtils.hp_stat_id:
-            return iv[GSCUtils.stat_id_iv_conv_table[stat_id]]
+    def get_iv(iv, stat_id, utils_class):
+        if stat_id != utils_class.hp_stat_id:
+            return iv[utils_class.stat_id_iv_conv_table[stat_id]]
         return ((iv[0]&1)<<3) | ((iv[1]&1)<<2) | ((iv[2]&1)<<1) | (iv[3]&1)
     
-    def get_exp(stat_exp, stat_id):
-        return stat_exp[GSCUtils.stat_id_exp_conv_table[stat_id]]
+    def get_exp(stat_exp, stat_id, utils_class):
+        return stat_exp[utils_class.stat_id_exp_conv_table[stat_id]]
     
-    def get_base_stat(species, stat_id):
-        return GSCUtils.base_stats[species][GSCUtils.stat_id_base_conv_table[stat_id]]
+    def get_base_stat(species, stat_id, utils_class):
+        return utils_class.base_stats[species][utils_class.stat_id_base_conv_table[stat_id]]
     
-    def stat_calculation(stat_id, species, ivs, stat_exp, level, do_exp=True):
-        inter_value = (GSCUtils.get_base_stat(species, stat_id) + GSCUtils.get_iv(ivs, stat_id)) * 2
+    def stat_calculation(stat_id, species, ivs, stat_exp, level, utils_class, do_exp=True):
+        inter_value = (utils_class.get_base_stat(species, stat_id, utils_class) + utils_class.get_iv(ivs, stat_id, utils_class)) * 2
         if do_exp:
-            inter_value += math.floor(math.ceil(math.sqrt(GSCUtils.get_exp(stat_exp, stat_id))/4))
+            inter_value += math.floor(math.ceil(math.sqrt(utils_class.get_exp(stat_exp, stat_id, utils_class))/4))
         inter_value = math.floor((inter_value*level)/100)
-        return inter_value + GSCUtils.final_stat_calc_step(stat_id, level)
+        return inter_value + utils_class.final_stat_calc_step(stat_id, level, utils_class)
     
     def is_item_mail(item):
         return GSCUtilsMisc.check_normal_list(GSCUtils.mail_ids, item)
@@ -405,8 +405,17 @@ class GSCTradingPokémonInfo:
     mail_len = 0x21
     sender_len = 0xE
     
+    species_pos = 0
+    item_pos = 1
+    moves_pos = 2
+    pps_pos = 0x17
+    level_pos = 0x1F
+    curr_hp_pos = 0x22
+    stats_pos = 0x24
+    evs_pos = 0xB
+    ivs_pos = 0x15
+    
     no_moves_equality_ranges = [range(0,2), range(6,0x17), range(0x1B, pokemon_data_len)]
-    no_moves_equality_weak_ranges = [range(0,2), range(6,0x17), range(0x1B, 0x20), range(0x24, pokemon_data_len)]
     all_lengths = [pokemon_data_len, ot_name_len, nickname_len, mail_len, sender_len]
 
     def __init__(self, data, start, length=pokemon_data_len):
@@ -435,7 +444,7 @@ class GSCTradingPokémonInfo:
         return not self.nickname.values_equal(self.utils_class.pokemon_names[self.get_species()])
     
     def get_species(self):
-        return self.values[0]
+        return self.values[self.species_pos]
     
     def learnable_moves(self):
         """
@@ -447,13 +456,13 @@ class GSCTradingPokémonInfo:
         return None
     
     def set_species(self, data):
-        self.values[0] = data & 0xFF
+        self.values[self.species_pos] = data & 0xFF
         
     def get_item(self):
-        return self.values[1]
+        return self.values[self.item_pos]
         
     def set_item(self, data=0):
-        self.values[1] = data & 0xFF
+        self.values[self.item_pos] = data & 0xFF
     
     def has_move_index(self, move, start=0):
         for i in range(start,4):
@@ -474,21 +483,21 @@ class GSCTradingPokémonInfo:
         return free_slots
     
     def get_move(self, pos):
-        return self.values[2 + pos]
+        return self.values[self.moves_pos + pos]
     
     def set_move(self, pos, val, max_pp=True):
-        self.values[2 + pos] = val
+        self.values[self.moves_pos + pos] = val
         if max_pp:
             self.set_pp(pos, self.utils_class.moves_pp_list[val])
     
     def set_pp(self, pos, val):
-        self.values[0x17 + pos] = val
+        self.values[self.pps_pos + pos] = val
     
     def get_pp(self, pos):
-        return self.values[0x17 + pos]
+        return self.values[self.pps_pos + pos]
     
     def get_level(self):
-        return self.values[0x1F]
+        return self.values[self.level_pos]
     
     def update_stats(self):
         """
@@ -496,38 +505,36 @@ class GSCTradingPokémonInfo:
         """
         old_max_hps = self.get_max_hp()
         old_current_hps = self.get_curr_hp()
-        for i in range(6):
-            GSCUtilsMisc.write_short(self.values, 0x24 + (i * 2), self.utils_class.stat_calculation(i, self.get_species(), self.get_ivs(), self.get_stat_exp(), self.get_level()))
+        for i in range(self.utils_class.num_stats):
+            GSCUtilsMisc.write_short(self.values, self.stats_pos + (i * 2), self.utils_class.stat_calculation(i, self.get_species(), self.get_ivs(), self.get_stat_exp(), self.get_level(), self.utils_class))
         new_max_hps = self.get_max_hp()
         old_current_hps += new_max_hps-old_max_hps
-        GSCUtilsMisc.write_short(self.values, 0x22, min(old_current_hps, new_max_hps))
+        GSCUtilsMisc.write_short(self.values, self.curr_hp_pos, min(old_current_hps, new_max_hps))
         
     def get_stat_exp(self):
         ret = [0,0,0,0,0]
         for i in range(5):
-            ret[i] = GSCUtilsMisc.read_short(self.values, 0xB + (i * 2))
+            ret[i] = GSCUtilsMisc.read_short(self.values, self.evs_pos + (i * 2))
         return ret
 
     def get_ivs(self):
         ret = [0,0,0,0]
-        calc_val = [GSCUtilsMisc.read_nybbles(self.values[0x15]), GSCUtilsMisc.read_nybbles(self.values[0x16])]
+        calc_val = [GSCUtilsMisc.read_nybbles(self.values[self.ivs_pos]), GSCUtilsMisc.read_nybbles(self.values[self.ivs_pos+1])]
         for i in range(4):
             ret[i] = calc_val[i>>1][i&1]
         return ret
 
     def get_curr_hp(self):
-        return GSCUtilsMisc.read_short(self.values, 0x22)
+        return GSCUtilsMisc.read_short(self.values, self.curr_hp_pos)
     
     def get_max_hp(self):
-        return GSCUtilsMisc.read_short(self.values, 0x24)
+        return GSCUtilsMisc.read_short(self.values, self.stats_pos)
     
     def has_mail(self):
         return self.utils_class.is_item_mail(self.get_item())
     
-    def is_equal(self, other, weak=False):
+    def is_equal(self, other):
         ranges = self.no_moves_equality_ranges
-        if weak:
-            ranges = self.no_moves_equality_weak_ranges
         for i in ranges:
             for j in i:
                 if self.values[j] != other.values[j]:
@@ -649,9 +656,9 @@ class GSCTradingData:
     
     def __init__(self, data_pokemon, data_mail=None, do_full=True):
         self.utils_class = self.get_utils_class()
-        self.trader = GSCTradingText(data_pokemon, self.trader_name_pos)
-        self.party_info = GSCTradingPartyInfo(data_pokemon, self.trading_party_info_pos)
-        self.trader_info = GSCUtilsMisc.read_short(data_pokemon, self.trader_info_pos)
+        self.trader = self.text_generator(data_pokemon, self.trader_name_pos)
+        self.party_info = self.party_generator(data_pokemon, self.trading_party_info_pos)
+        self.trader_info = self.trainer_info_generator(data_pokemon, self.trader_info_pos)
         self.pokemon = []
         if do_full:
             for i in range(self.get_party_size()):
@@ -664,6 +671,15 @@ class GSCTradingData:
     
     def mon_generator(self, data, pos):
         return GSCTradingPokémonInfo(data, pos)
+    
+    def text_generator(self, data, pos):
+        return GSCTradingText(data, pos)
+    
+    def party_generator(self, data, pos):
+        return GSCTradingPartyInfo(data, pos)
+    
+    def trainer_info_generator(self, data, pos):
+        return GSCUtilsMisc.read_short(data, pos)
     
     def get_utils_class(self):
         return GSCUtils
@@ -707,6 +723,16 @@ class GSCTradingData:
         for i in range(self.get_party_size()):
             mail_owned |= self.mon_has_mail(i)
         return mail_owned
+    
+    def evolution_procedure(self, pos, evolution):
+        """
+        Procedure which actually evolves the Pokémon in the data.
+        """
+        if not self.pokemon[pos].is_nicknamed():
+            self.pokemon[pos].add_nickname(self.utils_class.pokemon_names[evolution], 0)
+        self.pokemon[pos].set_species(evolution)
+        self.party_info.set_id(pos, self.pokemon[pos].get_species())
+        self.pokemon[pos].update_stats()
         
     @check_pos_validity
     def evolve_mon(self, pos):
@@ -717,16 +743,12 @@ class GSCTradingData:
         Returns False if it evolved and no player input is required.
         """
         evolution = self.utils_class.get_evolution(self.pokemon[pos].get_species(), self.pokemon[pos].get_item())
-        if evolution is None:
+        if evolution is None or self.is_mon_egg(pos):
             return None
         evo_item = self.utils_class.get_evolution_item(self.pokemon[pos].get_species())
         if evo_item is not None:
             self.pokemon[pos].set_item()
-        if not self.pokemon[pos].is_nicknamed():
-            self.pokemon[pos].add_nickname(self.utils_class.pokemon_names[evolution], 0)
-        self.pokemon[pos].set_species(evolution)
-        self.party_info.set_id(pos, self.pokemon[pos].get_species())
-        self.pokemon[pos].update_stats()
+        self.evolution_procedure(pos, evolution)
         curr_learning = self.pokemon[pos].learnable_moves()
         if curr_learning is not None:
             for i in range(len(curr_learning)):
@@ -776,7 +798,8 @@ class GSCTradingData:
         data[1][self.trading_party_info_pos] = self.get_party_size()
         GSCUtilsMisc.copy_to_data(data[1], self.trading_party_info_pos + 1, self.party_info.actual_mons)
         data[1][0x12] = 0xFF
-        GSCUtilsMisc.write_short(data[1], self.trader_info_pos, self.trader_info)
+        if self.trader_info is not None:
+            GSCUtilsMisc.write_short(data[1], self.trader_info_pos, self.trader_info)
         for i in range(self.get_party_size()):
             GSCUtilsMisc.copy_to_data(data[1], self.trading_pokemon_pos + (i * self.trading_pokemon_length), self.pokemon[i].values)
             GSCUtilsMisc.copy_to_data(data[1], self.trading_pokemon_ot_pos + (i * self.trading_name_length), self.pokemon[i].ot_name.values)
@@ -803,6 +826,9 @@ class GSCChecks:
     curr_exp_pos_masks = [0, 0xFF0000, 0xFFFF00]
     free_value_species = 0xFF
     free_value_moves = 0
+    tackle_id = 0x21
+    rattata_id = 0x13
+    question_mark = 0xE6
     
     def __init__(self, section_sizes, do_sanity_checks):
         self.utils_class = self.get_utils_class()
@@ -884,13 +910,16 @@ class GSCChecks:
     
     @clean_check_sanity_checks
     def clean_level(self, level):
-        self.level = self.utils_class.get_level_exp(self.curr_species, self.exp)
+        self.level = self.utils_class.get_level_exp(self.curr_species, self.exp, self.utils_class)
         return self.level
+    
+    def exp_range_calculations(self):
+        return [self.utils_class.get_exp_level(self.curr_species, self.utils_class.min_level, self.utils_class), self.utils_class.get_exp_level(self.curr_species, self.utils_class.max_level, self.utils_class)]
     
     @clean_check_sanity_checks
     def clean_experience(self, val):
         if self.curr_exp_pos == 0:
-            self.exp_range = [self.utils_class.get_exp_level(self.curr_species, self.utils_class.min_level), self.utils_class.get_exp_level(self.curr_species, self.utils_class.max_level)]
+            self.exp_range = self.exp_range_calculations()
             if val >= 0x80:
                 self.negative_exp = True
         if self.negative_exp:
@@ -931,14 +960,14 @@ class GSCChecks:
             self.moves[self.curr_move] = GSCChecks.free_value_moves
             self.curr_move += 1
             return move
-        final_move = self.clean_value(move, self.is_move_valid, 0x21)
+        final_move = self.clean_value(move, self.is_move_valid, self.tackle_id)
         self.moves[self.curr_move] = final_move
         self.curr_move += 1
         return final_move
     
     @clean_check_sanity_checks
     def clean_species(self, species):
-        self.curr_species = self.clean_value(species, self.is_species_valid, 0x13)
+        self.curr_species = self.clean_value(species, self.is_species_valid, self.rattata_id)
         self.curr_stat_id = 0
         self.iv = [0,0,0,0]
         self.stat_exp = [0,0,0,0,0]
@@ -960,7 +989,7 @@ class GSCChecks:
         if species == self.free_value_species or self.curr_species_pos >= self.team_size:
             self.curr_species_pos += 1
             return self.free_value_species
-        found_species = self.clean_value(species, self.is_species_valid, 0x13)
+        found_species = self.clean_value(species, self.is_species_valid, self.rattata_id)
         if species == self.utils_class.egg_id:
             found_species = species
         self.curr_species_pos += 1
@@ -988,7 +1017,7 @@ class GSCChecks:
     
     @clean_check_sanity_checks
     def clean_text(self, char):
-        char_val = self.clean_value(char, self.is_char_valid, 0xE6)
+        char_val = self.clean_value(char, self.is_char_valid, self.question_mark)
         self.curr_text += [char_val]
         # Possibility to put bad words filters here
         return char_val
@@ -1016,10 +1045,10 @@ class GSCChecks:
     def check_stat(self, val, zero_min=False):
         if self.curr_pos == 0:
             self.stat = 0
-            min_stat = self.utils_class.stat_calculation(self.curr_stat_id, self.curr_species, self.iv, self.stat_exp, self.level, do_exp=False)
+            min_stat = self.utils_class.stat_calculation(self.curr_stat_id, self.curr_species, self.iv, self.stat_exp, self.level, self.utils_class, do_exp=False)
             if zero_min:
                 min_stat = 0
-            self.stat_range = [min_stat, self.utils_class.stat_calculation(self.curr_stat_id, self.curr_species, self.iv, self.stat_exp, self.level)]
+            self.stat_range = [min_stat, self.utils_class.stat_calculation(self.curr_stat_id, self.curr_species, self.iv, self.stat_exp, self.level, self.utils_class)]
         curr_read_val = val << (8 * (1 - (self.curr_pos & 1)))
         self.stat = self.check_range(self.stat_range, (self.stat & 0xFF00) | curr_read_val)
         val = (self.stat >> (8 * (1 - (self.curr_pos & 1)))) & 0xFF
