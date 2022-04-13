@@ -6,6 +6,7 @@ from utilities.p2p_connection import P2PConnection
 from utilities.websocket_client import WebsocketRunner
 from time import sleep
 from utilities.gsc_trading import GSCTrading
+from utilities.rby_trading import RBYTrading
 from utilities.gsc_trading_menu import GSCTradingMenu
 from utilities.gsc_trading_strings import GSCTradingStrings
 
@@ -57,7 +58,7 @@ def transfer_func(p, menu):
     if menu.verbose:
         print(GSCTradingStrings.waiting_transfer_start_str)
     
-    trade_c = GSCTrading(p.sendByte, p.receiveByte, p.connection, menu, kill_function)
+    trade_c = RBYTrading(p.sendByte, p.receiveByte, p.connection, menu, kill_function)
     
     if menu.trade_type == GSCTradingStrings.two_player_trade_str:
         trade_c.player_trade(menu.buffered)

@@ -138,24 +138,25 @@ class GSCUtils:
     exp_lists = None
     
     def __init__(self):
-        if GSCUtils.evolution_ids is None:
-            GSCUtils.evolution_ids = GSCUtilsLoaders.prepare_evolution_check_list(GSCUtilsMisc.read_data(GSCUtils.evolution_ids_path))
-        if GSCUtils.mail_ids is None:
-            GSCUtils.mail_ids = GSCUtilsLoaders.prepare_check_list(GSCUtilsMisc.read_data(GSCUtils.mail_ids_path))
-        if GSCUtils.no_mail_section is None:
-            GSCUtils.no_mail_section = GSCUtilsMisc.read_data(GSCUtils.no_mail_path)
-        if GSCUtils.base_stats is None:
-            GSCUtils.base_stats = GSCUtilsLoaders.prepare_stats(GSCUtilsMisc.read_data(GSCUtils.base_stats_path))
-        if GSCUtils.pokemon_names_gs is None:
-            GSCUtils.pokemon_names_gs = GSCUtilsLoaders.text_to_bytes(GSCUtils.pokemon_names_gs_path, GSCUtils.text_conv_path)
-        if GSCUtils.moves_pp_list is None:
-            GSCUtils.moves_pp_list = GSCUtilsMisc.read_data(GSCUtils.moves_pp_list_path)
-        if GSCUtils.learnsets is None:
-            GSCUtils.learnsets = GSCUtilsLoaders.prepare_learnsets(GSCUtilsMisc.read_data(GSCUtils.learnset_evos_path))
-        if GSCUtils.exp_groups is None:
-            GSCUtils.exp_groups = GSCUtilsMisc.read_data(GSCUtils.exp_groups_path)
-        if GSCUtils.exp_lists is None:
-            GSCUtils.exp_lists = GSCUtilsLoaders.prepare_exp_lists(GSCUtilsLoaders.read_text_file(GSCUtils.exp_lists_path))
+        curr_class = type(self)
+        if curr_class.evolution_ids is None:
+            curr_class.evolution_ids = GSCUtilsLoaders.prepare_evolution_check_list(GSCUtilsMisc.read_data(curr_class.evolution_ids_path))
+        if curr_class.mail_ids is None:
+            curr_class.mail_ids = GSCUtilsLoaders.prepare_check_list(GSCUtilsMisc.read_data(curr_class.mail_ids_path))
+        if curr_class.no_mail_section is None:
+            curr_class.no_mail_section = GSCUtilsMisc.read_data(curr_class.no_mail_path)
+        if curr_class.base_stats is None:
+            curr_class.base_stats = GSCUtilsLoaders.prepare_stats(GSCUtilsMisc.read_data(curr_class.base_stats_path))
+        if curr_class.pokemon_names_gs is None:
+            curr_class.pokemon_names_gs = GSCUtilsLoaders.text_to_bytes(curr_class.pokemon_names_gs_path, curr_class.text_conv_path)
+        if curr_class.moves_pp_list is None:
+            curr_class.moves_pp_list = GSCUtilsMisc.read_data(curr_class.moves_pp_list_path)
+        if curr_class.learnsets is None:
+            curr_class.learnsets = GSCUtilsLoaders.prepare_learnsets(GSCUtilsMisc.read_data(curr_class.learnset_evos_path))
+        if curr_class.exp_groups is None:
+            curr_class.exp_groups = GSCUtilsMisc.read_data(curr_class.exp_groups_path)
+        if curr_class.exp_lists is None:
+            curr_class.exp_lists = GSCUtilsLoaders.prepare_exp_lists(GSCUtilsLoaders.read_text_file(curr_class.exp_lists_path))
     
     def get_level_exp(species, exp):
         start = GSCUtils.min_level
