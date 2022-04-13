@@ -5,7 +5,8 @@ class RBYUtils(GSCUtils):
     Class which contains generic methods and data used for
     pokémon-related functions.
     """
-    no_mail_path = "useful_data/no_mail_section_rby.bin"
+    base_folder = "useful_data/rby/"
+    num_stats = 5
     
     def __init__(self):
         super(RBYUtils, self).__init__()

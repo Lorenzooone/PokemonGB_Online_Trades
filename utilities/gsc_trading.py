@@ -10,6 +10,7 @@ class GSCTradingClient:
     to/from the other recepient.
     It uses a system of TAGs and IDs.
     """
+    base_folder = "useful_data/gsc/"
     full_transfer = "FLL2"
     single_transfer = "SNG2"
     pool_transfer = "POL2"
@@ -26,7 +27,7 @@ class GSCTradingClient:
     max_message_id = 255
     max_negotiation_id = 255
     
-    def __init__(self, trader, connection, verbose, stop_trade, party_reader, base_no_trade = "useful_data/base.bin", base_pool = "useful_data/base_pool.bin"):
+    def __init__(self, trader, connection, verbose, stop_trade, party_reader, base_no_trade = base_folder + "base.bin", base_pool = base_folder + "base_pool.bin"):
         self.fileBaseTargetName = base_no_trade
         self.fileBasePoolTargetName = base_pool
         self.connection = connection.hll
@@ -81,9 +82,14 @@ class GSCTradingClient:
         """
         val = self.connection.recv_data(self.moves_transfer)
         if val is not None:
+            updating_mon = self.trader.other_pokemon.pokemon[self.trader.other_pokemon.get_last_mon_index()]
+            data = [updating_mon.get_species()] + val
+            checker = self.trader.checks.moves_checks_map_path
+            for i in range(len(checker)):
+                data[i] = checker[i](data[i])
             for i in range(4):
-                self.trader.other_pokemon.pokemon[self.trader.other_pokemon.get_last_mon_index()].set_move(i, val[i], max_pp=False)
-                self.trader.other_pokemon.pokemon[self.trader.other_pokemon.get_last_mon_index()].set_pp(i, val[4+i])
+                updating_mon.set_move(i, data[i+1], max_pp=False)
+                updating_mon.set_pp(i, data[i+5])
         return val
         
     def send_move_data_only(self):

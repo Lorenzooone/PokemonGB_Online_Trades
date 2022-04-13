@@ -85,10 +85,10 @@ class GSCUtilsLoaders:
                     ret[data[i]] = (True, data[i + data_len], data[i + (2*data_len)])
         return ret
 
-    def prepare_stats(data):
+    def prepare_stats(data, num_stats):
         ret = [0] * 0x100
         for i in range(0x100):
-            ret[i] = data[(i)*6:(i+1)*6]
+            ret[i] = data[(i)*num_stats:(i+1)*num_stats]
         return ret
 
     def load_trading_data(target, lengths):
@@ -105,16 +105,17 @@ class GSCUtils:
     Class which contains generic methods and data used for
     pokémon-related functions.
     """
-    evolution_ids_path = "useful_data/evolution_ids.bin"
-    mail_ids_path = "useful_data/ids_mail.bin"
-    no_mail_path = "useful_data/no_mail_section.bin"
-    base_stats_path = "useful_data/stats_gsc.bin"
-    text_conv_path = "useful_data/text_conv.txt"
-    pokemon_names_gs_path = "useful_data/pokemon_names_gs.txt"
-    moves_pp_list_path = "useful_data/moves_pp_list.bin"
-    learnset_evos_path = "useful_data/learnset_evos.bin"
-    exp_groups_path = "useful_data/pokemon_exp_groups_gs.bin"
-    exp_lists_path = "useful_data/pokemon_exp_gs.txt"
+    base_folder = "useful_data/gsc/"
+    evolution_ids_path = "evolution_ids.bin"
+    mail_ids_path = "ids_mail.bin"
+    no_mail_path = "no_mail_section.bin"
+    base_stats_path = "stats.bin"
+    text_conv_path = "text_conv.txt"
+    pokemon_names_path = "pokemon_names.txt"
+    moves_pp_list_path = "moves_pp_list.bin"
+    learnset_evos_path = "learnset_evos.bin"
+    exp_groups_path = "pokemon_exp_groups.bin"
+    exp_lists_path = "pokemon_exp.txt"
     everstone_id = 0x70
     egg_id = 0xFD
     end_of_line = 0x50
@@ -126,11 +127,12 @@ class GSCUtils:
     egg_value = 0x38
     min_level = 2
     max_level = 100
+    num_stats = 6
     
     evolution_ids = None
     mail_ids = None
     base_stats = None
-    pokemon_names_gs = None
+    pokemon_names = None
     no_mail_section = None
     moves_pp_list = None
     learnsets = None
@@ -140,23 +142,26 @@ class GSCUtils:
     def __init__(self):
         curr_class = type(self)
         if curr_class.evolution_ids is None:
-            curr_class.evolution_ids = GSCUtilsLoaders.prepare_evolution_check_list(GSCUtilsMisc.read_data(curr_class.evolution_ids_path))
+            curr_class.evolution_ids = GSCUtilsLoaders.prepare_evolution_check_list(GSCUtilsMisc.read_data(self.get_path(curr_class.evolution_ids_path)))
         if curr_class.mail_ids is None:
-            curr_class.mail_ids = GSCUtilsLoaders.prepare_check_list(GSCUtilsMisc.read_data(curr_class.mail_ids_path))
+            curr_class.mail_ids = GSCUtilsLoaders.prepare_check_list(GSCUtilsMisc.read_data(self.get_path(curr_class.mail_ids_path)))
         if curr_class.no_mail_section is None:
-            curr_class.no_mail_section = GSCUtilsMisc.read_data(curr_class.no_mail_path)
+            curr_class.no_mail_section = GSCUtilsMisc.read_data(self.get_path(curr_class.no_mail_path))
         if curr_class.base_stats is None:
-            curr_class.base_stats = GSCUtilsLoaders.prepare_stats(GSCUtilsMisc.read_data(curr_class.base_stats_path))
-        if curr_class.pokemon_names_gs is None:
-            curr_class.pokemon_names_gs = GSCUtilsLoaders.text_to_bytes(curr_class.pokemon_names_gs_path, curr_class.text_conv_path)
+            curr_class.base_stats = GSCUtilsLoaders.prepare_stats(GSCUtilsMisc.read_data(self.get_path(curr_class.base_stats_path)), curr_class.num_stats)
+        if curr_class.pokemon_names is None:
+            curr_class.pokemon_names = GSCUtilsLoaders.text_to_bytes(self.get_path(curr_class.pokemon_names_path), self.get_path(curr_class.text_conv_path))
         if curr_class.moves_pp_list is None:
-            curr_class.moves_pp_list = GSCUtilsMisc.read_data(curr_class.moves_pp_list_path)
+            curr_class.moves_pp_list = GSCUtilsMisc.read_data(self.get_path(curr_class.moves_pp_list_path))
         if curr_class.learnsets is None:
-            curr_class.learnsets = GSCUtilsLoaders.prepare_learnsets(GSCUtilsMisc.read_data(curr_class.learnset_evos_path))
+            curr_class.learnsets = GSCUtilsLoaders.prepare_learnsets(GSCUtilsMisc.read_data(self.get_path(curr_class.learnset_evos_path)))
         if curr_class.exp_groups is None:
-            curr_class.exp_groups = GSCUtilsMisc.read_data(curr_class.exp_groups_path)
+            curr_class.exp_groups = GSCUtilsMisc.read_data(self.get_path(curr_class.exp_groups_path))
         if curr_class.exp_lists is None:
-            curr_class.exp_lists = GSCUtilsLoaders.prepare_exp_lists(GSCUtilsLoaders.read_text_file(curr_class.exp_lists_path))
+            curr_class.exp_lists = GSCUtilsLoaders.prepare_exp_lists(GSCUtilsLoaders.read_text_file(self.get_path(curr_class.exp_lists_path)))
+    
+    def get_path(self, target):
+        return self.base_folder + target
     
     def get_level_exp(species, exp):
         start = GSCUtils.min_level
@@ -427,7 +432,7 @@ class GSCTradingPokémonInfo:
         self.mail_sender = GSCTradingText(data, start, length=self.sender_len, data_start=4)
     
     def is_nicknamed(self):
-        return not self.nickname.values_equal(self.utils_class.pokemon_names_gs[self.get_species()])
+        return not self.nickname.values_equal(self.utils_class.pokemon_names[self.get_species()])
     
     def get_species(self):
         return self.values[0]
@@ -718,7 +723,7 @@ class GSCTradingData:
         if evo_item is not None:
             self.pokemon[pos].set_item()
         if not self.pokemon[pos].is_nicknamed():
-            self.pokemon[pos].add_nickname(self.utils_class.pokemon_names_gs[evolution], 0)
+            self.pokemon[pos].add_nickname(self.utils_class.pokemon_names[evolution], 0)
         self.pokemon[pos].set_species(evolution)
         self.party_info.set_id(pos, self.pokemon[pos].get_species())
         self.pokemon[pos].update_stats()
@@ -787,12 +792,14 @@ class GSCChecks:
     checks_map and single_pokemon_checks_map are its product used to apply
     the checks.
     """
-    bad_ids_items_path = "useful_data/bad_ids_items.bin"
-    bad_ids_moves_path = "useful_data/bad_ids_moves.bin"
-    bad_ids_pokemon_path = "useful_data/bad_ids_pokemon.bin"
-    bad_ids_text_path = "useful_data/bad_ids_text.bin"
-    checks_map_path = "useful_data/checks_map.bin"
-    single_pokemon_checks_map_path = "useful_data/single_pokemon_checks_map.bin"
+    base_folder = "useful_data/gsc/"
+    bad_ids_items_path = "bad_ids_items.bin"
+    bad_ids_moves_path = "bad_ids_moves.bin"
+    bad_ids_pokemon_path = "bad_ids_pokemon.bin"
+    bad_ids_text_path = "bad_ids_text.bin"
+    checks_map_path = "checks_map.bin"
+    single_pokemon_checks_map_path = "single_pokemon_checks_map.bin"
+    moves_checks_map_path = "moves_checks_map.bin"
     curr_exp_pos_masks = [0, 0xFF0000, 0xFFFF00]
     free_value_species = 0xFF
     free_value_moves = 0
@@ -800,10 +807,10 @@ class GSCChecks:
     def __init__(self, section_sizes, do_sanity_checks):
         self.utils_class = self.get_utils_class()
         self.do_sanity_checks = do_sanity_checks
-        self.bad_ids_items = GSCUtilsLoaders.prepare_check_list(GSCUtilsMisc.read_data(self.bad_ids_items_path))
-        self.bad_ids_moves = GSCUtilsLoaders.prepare_check_list(GSCUtilsMisc.read_data(self.bad_ids_moves_path))
-        self.bad_ids_pokemon = GSCUtilsLoaders.prepare_check_list(GSCUtilsMisc.read_data(self.bad_ids_pokemon_path))
-        self.bad_ids_text = GSCUtilsLoaders.prepare_check_list(GSCUtilsMisc.read_data(self.bad_ids_text_path))
+        self.bad_ids_items = GSCUtilsLoaders.prepare_check_list(GSCUtilsMisc.read_data(self.get_path(self.bad_ids_items_path)))
+        self.bad_ids_moves = GSCUtilsLoaders.prepare_check_list(GSCUtilsMisc.read_data(self.get_path(self.bad_ids_moves_path)))
+        self.bad_ids_pokemon = GSCUtilsLoaders.prepare_check_list(GSCUtilsMisc.read_data(self.get_path(self.bad_ids_pokemon_path)))
+        self.bad_ids_text = GSCUtilsLoaders.prepare_check_list(GSCUtilsMisc.read_data(self.get_path(self.bad_ids_text_path)))
         self.check_functions = [
             self.clean_nothing,
             self.clean_text,
@@ -823,8 +830,12 @@ class GSCChecks:
             self.clean_egg_cycles_friendship,
             self.clean_type
             ]
-        self.checks_map = self.prepare_checks_map(GSCUtilsMisc.read_data(self.checks_map_path), section_sizes)
-        self.single_pokemon_checks_map = self.prepare_basic_checks_map(GSCUtilsMisc.read_data(self.single_pokemon_checks_map_path))
+        self.checks_map = self.prepare_checks_map(GSCUtilsMisc.read_data(self.get_path(self.checks_map_path)), section_sizes)
+        self.single_pokemon_checks_map = self.prepare_basic_checks_map(GSCUtilsMisc.read_data(self.get_path(self.single_pokemon_checks_map_path)))
+        self.moves_checks_map = self.prepare_basic_checks_map(GSCUtilsMisc.read_data(self.get_path(self.moves_checks_map_path)))
+    
+    def get_path(self, target):
+        return self.base_folder + target
     
     def get_utils_class(self):
         return GSCUtils
@@ -946,9 +957,9 @@ class GSCChecks:
     
     @clean_check_sanity_checks
     def clean_species_sp(self, species):
-        if species == GSCChecks.free_value_species and self.curr_species_pos >= self.team_size:
+        if species == self.free_value_species or self.curr_species_pos >= self.team_size:
             self.curr_species_pos += 1
-            return species
+            return self.free_value_species
         found_species = self.clean_value(species, self.is_species_valid, 0x13)
         if species == self.utils_class.egg_id:
             found_species = species

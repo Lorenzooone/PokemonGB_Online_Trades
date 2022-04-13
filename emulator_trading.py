@@ -58,7 +58,7 @@ def transfer_func(p, menu):
     if menu.verbose:
         print(GSCTradingStrings.waiting_transfer_start_str)
     
-    trade_c = RBYTrading(p.sendByte, p.receiveByte, p.connection, menu, kill_function)
+    trade_c = GSCTrading(p.sendByte, p.receiveByte, p.connection, menu, kill_function)
     
     if menu.trade_type == GSCTradingStrings.two_player_trade_str:
         trade_c.player_trade(menu.buffered)

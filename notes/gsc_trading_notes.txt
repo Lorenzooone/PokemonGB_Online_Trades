@@ -36,3 +36,6 @@ Options mid-menu:
 Poison damage is disabled in the trading room.
 Egg cycles don't count down in the trading room.
 There are in-game checks which make sure you always have at least one alive mon.
+The time capsule won't evolve any Pokémon it recieves if they hold an Everstone...
+The time capsule won't evolve any Pokémon it recieves which couldn't evolve in Gen 1...
+The time capsule won't prevent learning new moves from Gen 2.
