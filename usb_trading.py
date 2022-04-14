@@ -26,7 +26,10 @@ def transfer_func():
     elif menu.trade_type == GSCTradingStrings.pool_trade_str:
         connection = WebsocketRunner(menu, kill_function)
         
-    trade_c = GSCTrading(sendByte, receiveByte, connection, menu, kill_function)
+    if menu.gen == 2:
+        trade_c = GSCTrading(sendByte, receiveByte, connection, menu, kill_function)
+    elif menu.gen == 1:
+        trade_c = RBYTrading(sendByte, receiveByte, connection, menu, kill_function)
     connection.start()
     
     if menu.trade_type == GSCTradingStrings.two_player_trade_str:

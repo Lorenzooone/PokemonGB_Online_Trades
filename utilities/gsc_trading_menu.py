@@ -18,9 +18,15 @@ class GSCTradingMenu:
         self.emulator = [emulator_host, emulator_port]
         self.do_sanity_checks = do_sanity_checks
         self.kill_on_byte_drops = kill_on_byte_drops
+        self.gen = 1
         self.verbose = verbose
         self.trade_type = None
         self.room = self.get_default_room()
+        self.toppest_menu_handlers = {
+            "1": self.start_gen1_trading,
+            "2": self.start_gen2_trading,
+            "3": self.start_gen1_trading
+            }
         self.top_menu_handlers = {
             "0": self.start_2p_trading,
             "1": self.start_2p_trading,
@@ -60,7 +66,17 @@ class GSCTradingMenu:
                 decided = True
         return buffered
     
+    def handle_game_selector(self):
+        ret_val = None
+        while ret_val is None:
+            GSCTradingStrings.game_selector_menu_print()
+            GSCTradingStrings.choice_print()
+            ret_val = self.toppest_menu_handlers.get(input(), None)
+            if ret_val is not None:
+                ret_val = ret_val()
+    
     def handle_menu(self):
+        self.handle_game_selector()
         ret_val = False
         while not ret_val:
             GSCTradingStrings.top_menu_print()
@@ -79,6 +95,14 @@ class GSCTradingMenu:
     
     def start_pool_trading(self):
         self.trade_type = GSCTradingStrings.pool_trade_str
+        return True
+    
+    def start_gen1_trading(self):
+        self.gen = 1
+        return True
+    
+    def start_gen2_trading(self):
+        self.gen = 2
         return True
     
     def handle_options(self):

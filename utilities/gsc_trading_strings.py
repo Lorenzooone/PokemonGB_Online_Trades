@@ -75,6 +75,11 @@ class GSCTradingStrings:
     room_str = "Room (Default = {room}): "
     emulator_host_str = "Emulator's host: "
     emulator_port_str = "Emulator's port: "
+    game_selector_menu_str = ("\n=============== Game Selector ===============\n"
+                          "1) Red/Blue/Yellow\n"
+                          "2) Gold/Silver/Crystal\n"
+                          "3) Timecapsule in Gold/Silver/Crystal"
+                          )
     top_level_menu_str = ("\n=============== Top level Menu ===============\n"
                           "1) Start 2-Player trade (Default)\n"
                           "2) Start Pool trade\n"
@@ -129,6 +134,9 @@ class GSCTradingStrings:
         print(GSCTradingStrings.buffered_chosen_str.format(own_buffered = GSCTradingStrings.get_buffered_str(buffered)))
         if buffered:
             print(GSCTradingStrings.buffered_sit_table_str)
+            
+    def game_selector_menu_print():
+        print(GSCTradingStrings.game_selector_menu_str)
             
     def top_menu_print():
         print(GSCTradingStrings.top_level_menu_str)

@@ -20,6 +20,7 @@ class P2PConnection (threading.Thread):
         self.verbose = menu.verbose
         self.host = host
         self.port = port
+        self.gen = menu.gen
         self.room = menu.room
         self.hll = GSCTradingListener()
         self.kill_function = kill_function
@@ -49,7 +50,7 @@ class P2PConnection (threading.Thread):
             real_port = int(s.getsockname()[1])
             self.verbose_print(GSCTradingStrings.p2p_listening_str.format(host=self.host, port=real_port))
                 
-            response = self.ws.get_peer(self.host, real_port, self.room)
+            response = self.ws.get_peer(self.host, real_port, self.room, self.gen)
             if response.startswith("SERVER"):
                 is_server = True
             else:

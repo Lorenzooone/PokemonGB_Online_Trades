@@ -29,8 +29,7 @@ class RBYUtils(GSCUtils):
     def __init__(self):
         super(RBYUtils, self).__init__()
         curr_class = type(self)
-        if curr_class.types_list is None:
-            curr_class.types_list = RBYUtilsLoaders.prepare_types(GSCUtilsMisc.read_data(self.get_path(curr_class.types_list_path)))
+        curr_class.types_list = RBYUtilsLoaders.prepare_types(GSCUtilsMisc.read_data(self.get_path(curr_class.types_list_path)))
         
     def is_item_mail(item):
         return False
@@ -105,7 +104,7 @@ class RBYTradingPokémonInfo(GSCTradingPokémonInfo):
     item_pos = 7
     moves_pos = 8
     pps_pos = 0x1D
-    level_pos = 3
+    level_pos = 0x21
     curr_hp_pos = 1
     stats_pos = 0x22
     evs_pos = 0x11
