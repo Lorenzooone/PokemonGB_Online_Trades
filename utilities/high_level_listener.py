@@ -1,7 +1,7 @@
 from time import sleep
 from .gsc_trading_strings import GSCTradingStrings
 
-class GSCTradingListener:
+class HighLevelListener:
     """
     Class which handles high level comunications.
     """
@@ -40,7 +40,7 @@ class GSCTradingListener:
         self.send_dict[type] = data
         self.to_send = self.prepare_send_data(type, data)
         while self.to_send is not None:
-            sleep(GSCTradingListener.SLEEP_TIMER)
+            sleep(HighLevelListener.SLEEP_TIMER)
     
     def prepare_listener(self, type, listener):
         """
@@ -55,7 +55,7 @@ class GSCTradingListener:
         if not type in self.recv_dict.keys():
             self.to_send = self.prepare_get_data(type)
             while self.to_send is not None:
-                sleep(GSCTradingListener.SLEEP_TIMER)
+                sleep(HighLevelListener.SLEEP_TIMER)
             return None
         else:
             if reset:
@@ -81,16 +81,16 @@ class GSCTradingListener:
         If it's a get, it sends the requested data, if present
         inside the send dict.
         """
-        req_info = data[GSCTradingListener.REQ_INFO_POSITION:GSCTradingListener.REQ_INFO_POSITION+GSCTradingListener.LEN_POSITION].decode()
+        req_info = data[HighLevelListener.REQ_INFO_POSITION:HighLevelListener.REQ_INFO_POSITION+HighLevelListener.LEN_POSITION].decode()
         req_kind = req_info[0]
-        req_type = req_info[1:GSCTradingListener.LEN_POSITION]
+        req_type = req_info[1:HighLevelListener.LEN_POSITION]
         prepared = None
         if req_kind == GSCTradingStrings.send_request:
-            data_len = (data[GSCTradingListener.LEN_POSITION] << 8) + data[GSCTradingListener.LEN_POSITION+1]
+            data_len = (data[HighLevelListener.LEN_POSITION] << 8) + data[HighLevelListener.LEN_POSITION+1]
             pre_present = False
             if req_type in self.recv_dict.keys():
                 pre_present = True
-            self.recv_dict[req_type] = list(data[GSCTradingListener.DATA_POSITION:GSCTradingListener.DATA_POSITION+data_len])
+            self.recv_dict[req_type] = list(data[HighLevelListener.DATA_POSITION:HighLevelListener.DATA_POSITION+data_len])
             if req_type in self.on_receive_dict.keys():
                 self.on_receive_dict[req_type]()
         elif req_kind == GSCTradingStrings.get_request:

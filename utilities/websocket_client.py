@@ -5,9 +5,9 @@ import websockets
 import threading
 from time import sleep
 from .gsc_trading_strings import GSCTradingStrings
-from .gsc_trading_listener import GSCTradingListener
+from .high_level_listener import HighLevelListener
 
-class WebsocketRunner (threading.Thread):
+class PoolTradeRunner (threading.Thread):
     """
     Class for running the websocket as a standalone piece.
     """
@@ -17,7 +17,7 @@ class WebsocketRunner (threading.Thread):
         threading.Thread.__init__(self)
         self.setDaemon(True)
         self.gen = menu.gen
-        self.hll = GSCTradingListener()
+        self.hll = HighLevelListener()
         self.kill_function = kill_function
         self.ws = WebsocketClient(menu.server[0], menu.server[1], kill_function)
 

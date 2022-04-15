@@ -242,6 +242,15 @@ class RBYChecks(GSCChecks):
         return val
     
     @GSCChecks.clean_check_sanity_checks
+    def clean_species_sp(self, species):
+        if species == self.free_value_species or self.curr_species_pos >= self.team_size:
+            self.curr_species_pos += 1
+            return self.free_value_species
+        found_species = self.clean_value(species, self.is_species_valid, self.rattata_id)
+        self.curr_species_pos += 1
+        return found_species
+    
+    @GSCChecks.clean_check_sanity_checks
     def clean_item(self, item):
         return item
     

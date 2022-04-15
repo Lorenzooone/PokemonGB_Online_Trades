@@ -5,7 +5,7 @@ from .websocket_client import WebsocketClient
 from time import sleep
 from .gsc_trading_strings import GSCTradingStrings
 from .gsc_trading_data_utils import GSCUtilsMisc
-from .gsc_trading_listener import GSCTradingListener
+from .high_level_listener import HighLevelListener
 
 class P2PConnection (threading.Thread):
     """
@@ -22,7 +22,7 @@ class P2PConnection (threading.Thread):
         self.port = port
         self.gen = menu.gen
         self.room = menu.room
-        self.hll = GSCTradingListener()
+        self.hll = HighLevelListener()
         self.kill_function = kill_function
         self.ws = WebsocketClient(menu.server[0], menu.server[1], kill_function)
     

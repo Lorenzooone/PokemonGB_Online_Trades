@@ -8,7 +8,7 @@ import os
 from random import Random
 from time import sleep
 import ipaddress
-from utilities.gsc_trading_listener import GSCTradingListener
+from utilities.high_level_listener import HighLevelListener
 from utilities.gsc_trading import GSCTradingClient
 from utilities.rby_trading import RBYTradingClient
 from utilities.gsc_trading_strings import GSCTradingStrings
@@ -95,7 +95,7 @@ class PoolTradeServer:
         self.last_accepted = None
         self.last_success = None
         self.clear_pool = True
-        self.hll = GSCTradingListener()
+        self.hll = HighLevelListener()
         self.mon_index = None
         self.received_mon = None
         self.received_accepted = None

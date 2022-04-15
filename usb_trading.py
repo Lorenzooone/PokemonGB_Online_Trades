@@ -7,7 +7,7 @@ import time
 import os
 from utilities.gsc_trading import GSCTrading
 from utilities.rby_trading import RBYTrading
-from utilities.websocket_client import WebsocketRunner
+from utilities.websocket_client import PoolTradeRunner
 from utilities.p2p_connection import P2PConnection
 from utilities.gsc_trading_menu import GSCTradingMenu
 from utilities.gsc_trading_strings import GSCTradingStrings
@@ -24,7 +24,7 @@ def transfer_func():
     if menu.trade_type == GSCTradingStrings.two_player_trade_str:
         connection = P2PConnection(menu, kill_function)
     elif menu.trade_type == GSCTradingStrings.pool_trade_str:
-        connection = WebsocketRunner(menu, kill_function)
+        connection = PoolTradeRunner(menu, kill_function)
         
     if menu.gen == 2:
         trade_c = GSCTrading(sendByte, receiveByte, connection, menu, kill_function)
