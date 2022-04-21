@@ -62,9 +62,7 @@ class RBYUtils(GSCUtils):
         if len(data) >= len(checker):
             # Applies the checks to the received data.
             # If the sanity checks are off, this will be a simple copy
-            purified_data = list(data)
-            for j in range(len(checker)):
-                purified_data[j] = checker[j](data[j])
+            purified_data = checks.apply_checks_to_data(checker, data)
                 
             # Prepares the pokémon data. For both the cleaned one and
             # the raw one
@@ -161,8 +159,8 @@ class RBYTradingData(GSCTradingData):
     def __init__(self, data_pokemon, data_mail=None, do_full=True):
         super(RBYTradingData, self).__init__(data_pokemon, data_mail=None, do_full=do_full)
     
-    def mon_generator(self, data, pos):
-        return RBYTradingPokémonInfo(data, pos)
+    def mon_generator_class(self):
+        return RBYTradingPokémonInfo
     
     def text_generator(self, data, pos):
         return RBYTradingText(data, pos)

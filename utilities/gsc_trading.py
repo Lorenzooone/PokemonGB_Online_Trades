@@ -84,9 +84,7 @@ class GSCTradingClient:
         if val is not None:
             updating_mon = self.trader.other_pokemon.pokemon[self.trader.other_pokemon.get_last_mon_index()]
             data = [updating_mon.get_species()] + val
-            checker = self.trader.checks.moves_checks_map_path
-            for i in range(len(checker)):
-                data[i] = checker[i](data[i])
+            data = self.trader.checks.apply_checks_to_data(self.trader.checks.moves_checks_map_path, data)
             for i in range(4):
                 updating_mon.set_move(i, data[i+1], max_pp=False)
                 updating_mon.set_pp(i, data[i+5])
@@ -717,7 +715,7 @@ class GSCTrading:
 
                 if not self.is_choice_decline(received_accepted) and not self.is_choice_decline(accepted):
                     # Apply the trade to the data
-                    self.own_pokemon.trade_mon(self.other_pokemon, self.convert_choice(sent_mon), self.convert_choice(received_choice))
+                    self.own_pokemon.trade_mon(self.other_pokemon, self.convert_choice(sent_mon), self.convert_choice(received_choice), self.checks)
                     self.own_blank_trade = GSCUtilsMisc.default_if_none(self.own_pokemon.evolve_mon(self.own_pokemon.get_last_mon_index()), False)
                     self.other_blank_trade = GSCUtilsMisc.default_if_none(self.other_pokemon.evolve_mon(self.other_pokemon.get_last_mon_index()), False)
                     

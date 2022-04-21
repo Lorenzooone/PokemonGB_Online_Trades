@@ -233,9 +233,7 @@ class GSCUtils:
         if len(data) > len(checker):
             # Applies the checks to the received data.
             # If the sanity checks are off, this will be a simple copy
-            purified_data = list(data)
-            for j in range(len(checker)):
-                purified_data[j] = checker[j](data[j])
+            purified_data = checks.apply_checks_to_data(checker, data)
                 
             # Prepares the pokémon data. For both the cleaned one and
             # the raw one
@@ -661,7 +659,10 @@ class GSCTradingData:
                     self.pokemon[i].add_mail_sender(data_mail, self.trading_pokemon_mail_sender_pos + i * self.trading_mail_sender_length)
     
     def mon_generator(self, data, pos):
-        return GSCTradingPokémonInfo(data, pos)
+        return self.mon_generator_class()(data, pos)
+    
+    def mon_generator_class(self):
+        return GSCTradingPokémonInfo
     
     def text_generator(self, data, pos):
         return GSCTradingText(data, pos)
@@ -751,16 +752,18 @@ class GSCTradingData:
                         return True
         return False
     
-    def trade_mon(self, other, own_index, other_index):
+    def trade_mon(self, other, own_index, other_index, checks):
         """
         Trades a pokémon between two parties.
         """
         self.reorder_party(own_index)
         other.reorder_party(other_index)
-        own = self.pokemon[self.get_last_mon_index()]
+        own = self.mon_generator_class().set_data(checks.apply_checks_to_data(checks.single_pokemon_checks_map, self.pokemon[self.get_last_mon_index()].get_data()))
         self.pokemon[self.get_last_mon_index()] = other.pokemon[other.get_last_mon_index()]
         other.pokemon[other.get_last_mon_index()] = own
-        own_id = self.party_info.get_id(self.get_last_mon_index())
+        checks.curr_species_pos = self.get_last_mon_index()
+        checks.team_size = self.get_party_size()
+        own_id = checks.species_cleaner(self.party_info.get_id(self.get_last_mon_index()))
         self.party_info.set_id(self.get_last_mon_index(), other.party_info.get_id(other.get_last_mon_index()))
         other.party_info.set_id(other.get_last_mon_index(), own_id)
     
@@ -850,6 +853,7 @@ class GSCChecks:
         self.checks_map = self.prepare_checks_map(GSCUtilsMisc.read_data(self.get_path(self.checks_map_path)), section_sizes)
         self.single_pokemon_checks_map = self.prepare_basic_checks_map(GSCUtilsMisc.read_data(self.get_path(self.single_pokemon_checks_map_path)))
         self.moves_checks_map = self.prepare_basic_checks_map(GSCUtilsMisc.read_data(self.get_path(self.moves_checks_map_path)))
+        self.species_cleaner = self.clean_species_sp
     
     def get_path(self, target):
         return self.base_folder + target
@@ -875,6 +879,12 @@ class GSCChecks:
             else:
                 return True
         return wrapper
+    
+    def apply_checks_to_data(self, checker, data):
+        new_data = list(data)
+        for j in range(len(checker)):
+            new_data[j] = checker[j](data[j])
+        return new_data
 
     def prepare_text_buffer(self):
         self.curr_text = []
