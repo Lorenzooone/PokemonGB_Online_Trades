@@ -78,6 +78,25 @@ class HighLevelListener:
         """
         return self.prepare_send_data(req_type, self.send_dict[req_type])
     
+    def is_received_valid(self, data):
+        """
+        Returns whether the received data is valid or not.
+        """
+        # Is the data long enough to be a valid request?
+        if (data is not None) and (len(data) >= HighLevelListener.LEN_POSITION):
+            req_info = data[HighLevelListener.REQ_INFO_POSITION:HighLevelListener.REQ_INFO_POSITION+HighLevelListener.LEN_POSITION].decode()
+            req_kind = req_info[0]
+            req_type = req_info[1:HighLevelListener.LEN_POSITION]
+            # If it's a send request, is it long enough to have the data length field?
+            if (req_kind == GSCTradingStrings.send_request) and (self.valid_transfers is not None) and (len(data) > HighLevelListener.DATA_POSITION):
+                data_len = (data[HighLevelListener.LEN_POSITION] << 8) + data[HighLevelListener.LEN_POSITION+1]
+                # If it has a length, is it a valid request? Is its length right? Is the advertised length real?
+                if (len(data) >= (HighLevelListener.DATA_POSITION + data_len)) and (req_type in self.valid_transfers.keys()) and (data_len in self.valid_transfers[req_type]):
+                    return [req_kind, req_type, data_len]
+            elif req_kind == GSCTradingStrings.get_request:
+                return [req_kind, req_type]
+        return None
+        
     def process_received_data(self, data, connection, send_data=True, preparer=False):
         """
         Processes the received data. If it's a send, it stores
@@ -85,30 +104,22 @@ class HighLevelListener:
         If it's a get, it sends the requested data, if present
         inside the send dict.
         """
-        if (data is not None) and (len(data) >= HighLevelListener.LEN_POSITION):
-            req_info = data[HighLevelListener.REQ_INFO_POSITION:HighLevelListener.REQ_INFO_POSITION+HighLevelListener.LEN_POSITION].decode()
-            req_kind = req_info[0]
-            req_type = req_info[1:HighLevelListener.LEN_POSITION]
-            prepared = None
-            if (req_kind == GSCTradingStrings.send_request) and (self.valid_transfers is not None) and (len(data) > HighLevelListener.DATA_POSITION):
-                data_len = (data[HighLevelListener.LEN_POSITION] << 8) + data[HighLevelListener.LEN_POSITION+1]
-                if (len(data) >= (HighLevelListener.DATA_POSITION + data_len)) and (req_type in self.valid_transfers.keys()) and (data_len in self.valid_transfers[req_type]):
-                    pre_present = False
-                    if req_type in self.recv_dict.keys():
-                        pre_present = True
-                    self.recv_dict[req_type] = list(data[HighLevelListener.DATA_POSITION:HighLevelListener.DATA_POSITION+data_len])
-                    if req_type in self.on_receive_dict.keys():
-                        self.on_receive_dict[req_type]()
-                else:
-                    return ["", "", None]
-            elif req_kind == GSCTradingStrings.get_request:
-                if req_type in self.send_dict.keys() and send_data:
-                    if not preparer:
-                        self.connection_normal_sender(req_type, connection)
-                    else:
-                        prepared = self.connection_prepare_sender(req_type)
-            else:
-                return ["", "", None]
-        else:
+        ret = self.is_received_valid(data)
+        if ret is None:
             return ["", "", None]
+            
+        req_kind = ret[0]
+        req_type = ret[1]
+        prepared = None
+        if req_kind == GSCTradingStrings.send_request:
+            data_len = ret[2]
+            self.recv_dict[req_type] = list(data[HighLevelListener.DATA_POSITION:HighLevelListener.DATA_POSITION+data_len])
+            if req_type in self.on_receive_dict.keys():
+                self.on_receive_dict[req_type]()
+        elif req_kind == GSCTradingStrings.get_request:
+            if req_type in self.send_dict.keys() and send_data:
+                if not preparer:
+                    self.connection_normal_sender(req_type, connection)
+                else:
+                    prepared = self.connection_prepare_sender(req_type)
         return [req_kind, req_type, prepared]

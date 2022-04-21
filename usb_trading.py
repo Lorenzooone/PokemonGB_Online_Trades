@@ -86,6 +86,8 @@ try:
         from winusbcdc import ComPort
         print("Trying WinUSB CDC")
         p = ComPort(vid=0xcafe, pid=0x4011)
+        if not p.is_open:
+            exit_gracefully()
         #p.baudrate = 115200
         sender = sendByte_win
         receiver = receiveByte_win
