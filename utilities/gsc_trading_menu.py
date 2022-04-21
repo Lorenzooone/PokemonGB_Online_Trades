@@ -1,6 +1,7 @@
 import threading
 from random import Random
 from .gsc_trading_strings import GSCTradingStrings
+from argparse import ArgumentParser
 
 class GSCTradingMenu:
     """
@@ -8,20 +9,21 @@ class GSCTradingMenu:
     """
     default_server = ["localhost", 11111]
     default_emulator = ["localhost", 8765]
-    two_player_trade_str = "2P"
-    pool_trade_str = "PS"
 
-    def __init__(self, server_host=default_server[0], server_port=default_server[1], buffered=False, is_emulator=False, do_sanity_checks=True, kill_on_byte_drops=True, emulator_host=default_emulator[0], emulator_port=default_emulator[1], verbose=True):
-        self.server = [server_host, server_port]
-        self.buffered = buffered
+    def __init__(self, is_emulator=False):
+        args = self.handle_args(is_emulator)
+        
+        # Initialize the menu
+        self.server = [args.server_host, args.server_port]
+        self.buffered = args.buffered
         self.is_emulator = is_emulator
-        self.emulator = [emulator_host, emulator_port]
-        self.do_sanity_checks = do_sanity_checks
-        self.kill_on_byte_drops = kill_on_byte_drops
-        self.gen = 1
-        self.verbose = verbose
-        self.trade_type = None
-        self.room = self.get_default_room()
+        self.emulator = [args.emulator_host, args.emulator_port]
+        self.do_sanity_checks = args.do_sanity_checks
+        self.kill_on_byte_drops = args.kill_on_byte_drops
+        self.verbose = args.verbose
+        self.gen = args.gen_number
+        self.trade_type = args.trade_type
+        self.room = args.room
         self.toppest_menu_handlers = {
             "1": self.start_gen1_trading,
             "2": self.start_gen2_trading,
@@ -67,21 +69,28 @@ class GSCTradingMenu:
         return buffered
     
     def handle_game_selector(self):
-        ret_val = None
-        while ret_val is None:
-            GSCTradingStrings.game_selector_menu_print()
-            GSCTradingStrings.choice_print()
-            ret_val = self.toppest_menu_handlers.get(input(), None)
-            if ret_val is not None:
-                ret_val = ret_val()
+        if self.gen is None or ((self.gen != 1) and (self.gen != 2)):
+            ret_val = None
+            while ret_val is None:
+                GSCTradingStrings.game_selector_menu_print()
+                GSCTradingStrings.choice_print()
+                ret_val = self.toppest_menu_handlers.get(input(), None)
+                if ret_val is not None:
+                    ret_val = ret_val()
     
     def handle_menu(self):
-        self.handle_game_selector()
-        ret_val = False
-        while not ret_val:
-            GSCTradingStrings.top_menu_print()
-            GSCTradingStrings.choice_print()
-            ret_val = self.top_menu_handlers.get(input(), self.top_menu_handlers["0"])()
+        if self.trade_type is None or ((self.trade_type != GSCTradingStrings.two_player_trade_str) and (self.trade_type != GSCTradingStrings.pool_trade_str)):
+            self.handle_game_selector()
+            ret_val = False
+            while not ret_val:
+                GSCTradingStrings.top_menu_print()
+                GSCTradingStrings.choice_print()
+                ret_val = self.top_menu_handlers.get(input(), self.top_menu_handlers["0"])()
+        else:
+            if self.trade_type == GSCTradingStrings.two_player_trade_str:
+                self.start_2p_trading()
+            elif self.trade_type == GSCTradingStrings.pool_trade_str:
+                self.start_pool_trading()
     
     def get_default_room(self):
         r = Random()
@@ -89,8 +98,10 @@ class GSCTradingMenu:
     
     def start_2p_trading(self):
         self.trade_type = GSCTradingStrings.two_player_trade_str
-        GSCTradingStrings.change_room_print(self.room)
-        self.room = self.get_int(self.room)
+        if self.room is None:
+            self.room = self.get_default_room()
+            GSCTradingStrings.change_room_print(self.room)
+            self.room = self.get_int(self.room)
         return True
     
     def start_pool_trading(self):
@@ -151,6 +162,38 @@ class GSCTradingMenu:
     def handle_verbose_option(self):
         self.verbose = not self.verbose
         return False
+    
+    def handle_args(self, is_emulator):
+        # Parse program's arguments
+        parser = ArgumentParser()
+        parser.add_argument("-g", "--generation", dest="gen_number", default = None,
+                            help="generation (1 = RBY/Timecapsule, 2 = GSC)", type=int)
+        parser.add_argument("-t", "--trade_type", dest="trade_type", default = None,
+                            help="trade type (" + GSCTradingStrings.two_player_trade_str + " = 2-Player Trade, " + GSCTradingStrings.pool_trade_str + " = Pool Trade)")
+        parser.add_argument("-r", "--room", dest="room", default = None,
+                            help="2-Player Trade's room", type=int)
+        parser.add_argument("-b", "--buffered",
+                            action="store_true", dest="buffered", default=False,
+                            help="default to buffered trading instead of synchronous")
+        parser.add_argument("-dsc", "--disable_sanity_checks",
+                            action="store_false", dest="do_sanity_checks", default=True,
+                            help="don't perform sanity checks for data sent to the device")
+        parser.add_argument("-dkb", "--disable_kill_drops",
+                            action="store_false", dest="kill_on_byte_drops", default=True,
+                            help="don't kill the process for dropped bytes")
+        parser.add_argument("-q", "--quiet",
+                            action="store_false", dest="verbose", default=True,
+                            help="don't print status messages to stdout")
+        parser.add_argument("-sh", "--server_host", dest="server_host", default = self.default_server[0],
+                            help="server's host")
+        parser.add_argument("-sp", "--server_port", dest="server_port", default = self.default_server[1],
+                            help="server's port", type=int)
+        if is_emulator:
+            parser.add_argument("-eh", "--emulator_host", dest="emulator_host", default = self.default_emulator[0],
+                                help="emulator's local host")
+            parser.add_argument("-ep", "--emulator_port", dest="emulator_port", default = self.default_emulator[1],
+                                help="emulator's local port", type=int)
+        return parser.parse_args()
 
 class GSCBufferedNegotiator(threading.Thread):
     """
