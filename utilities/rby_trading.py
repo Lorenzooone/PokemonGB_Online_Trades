@@ -19,6 +19,18 @@ class RBYTradingClient(GSCTradingClient):
     success_transfer = "SUC1"
     buffered_transfer = "BUF1"
     negotiation_transfer = "NEG1"
+    possible_transfers = {
+        full_transfer: {0x271}, # Sum of special_sections_len
+        single_transfer: {7},
+        pool_transfer: {1 + 0x42, 1 + 1}, # Counter + Single Pokémon OR Counter + Fail
+        moves_transfer: {1 + 1 + 8}, # Counter + Species + Moves
+        mail_transfer : {1 + 0xC5}, # Counter + Mail
+        choice_transfer : {1 + 1 + 0x42, 1 + 1}, # Counter + Choice + Single Pokémon OR Counter + Stop
+        accept_transfer : {1 + 1}, # Counter + Accept
+        success_transfer : {1 + 1}, # Counter + Success
+        buffered_transfer : {1 + 1}, # Counter + Buffered or not
+        negotiation_transfer : {1 + 1} # Counter + Convergence value
+    }
     
     def __init__(self, trader, connection, verbose, stop_trade, party_reader, base_no_trade = base_folder + "base.bin", base_pool = base_folder + "base_pool.bin"):
         super(RBYTradingClient, self).__init__(trader, connection, verbose, stop_trade, party_reader, base_no_trade=base_no_trade, base_pool=base_pool)
@@ -32,7 +44,7 @@ class RBYTradingClient(GSCTradingClient):
         has user input and the species of the pokémon.
         It also loads it into the correct pokémon and evolves it if necessary.
         """
-        val = self.connection.recv_data(self.moves_transfer)
+        val = self.get_with_counter(self.moves_transfer)
         if val is not None:
             updating_mon = self.trader.other_pokemon.pokemon[self.trader.other_pokemon.get_last_mon_index()]
             data = self.trader.checks.apply_checks_to_data(self.trader.checks.moves_checks_map_path, val)
@@ -55,7 +67,7 @@ class RBYTradingClient(GSCTradingClient):
         for i in range(4):
             val[i+1] = updated_mon.get_move(i)
             val[i+5] = updated_mon.get_pp(i)
-        self.connection.send_data(self.moves_transfer, val)
+        self.send_with_counter(self.moves_transfer, val)
 
 class RBYTrading(GSCTrading):
     """

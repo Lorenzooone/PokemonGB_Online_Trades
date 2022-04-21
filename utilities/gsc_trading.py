@@ -21,8 +21,21 @@ class GSCTradingClient:
     success_transfer = "SUC2"
     buffered_transfer = "BUF2"
     negotiation_transfer = "NEG2"
+    possible_transfers = {
+        full_transfer: {0x412}, # Sum of special_sections_len
+        single_transfer: {7},
+        pool_transfer: {1 + 0x75 + 1, 1 + 1}, # Counter + Single Pokémon + Egg OR Counter + Fail
+        moves_transfer: {1 + 8}, # Counter + Moves
+        mail_transfer : {1 + 0x24C}, # Counter + Mail
+        choice_transfer : {1 + 1 + 0x75 + 1, 1 + 1}, # Counter + Choice + Single Pokémon + Egg OR Counter + Stop
+        accept_transfer : {1 + 1}, # Counter + Accept
+        success_transfer : {1 + 1}, # Counter + Success
+        buffered_transfer : {1 + 1}, # Counter + Buffered or not
+        negotiation_transfer : {1 + 1} # Counter + Convergence value
+    }
     buffered_value = 0x85
     not_buffered_value = 0x12
+    pool_fail_value = 0x38
     success_value = 0x91
     max_message_id = 255
     max_negotiation_id = 255
@@ -31,6 +44,7 @@ class GSCTradingClient:
         self.fileBaseTargetName = base_no_trade
         self.fileBasePoolTargetName = base_pool
         self.connection = connection.hll
+        self.connection.set_valid_transfers(self.possible_transfers)
         self.stop_trade = stop_trade
         self.received_one = False
         self.party_reader = party_reader
@@ -54,13 +68,13 @@ class GSCTradingClient:
         """
         Handles getting the mail data when only the other player has mail.
         """
-        return self.connection.recv_data(self.mail_transfer)
+        return self.get_with_counter(self.mail_transfer)
         
     def send_mail_data_only(self, data):
         """
         Handles sending the mail data when the other player has no mail.
         """
-        self.connection.send_data(self.mail_transfer, data)
+        self.send_with_counter(self.mail_transfer, data)
     
     def get_success(self):
         """
@@ -80,7 +94,7 @@ class GSCTradingClient:
         has user input.
         It also loads it into the correct pokémon.
         """
-        val = self.connection.recv_data(self.moves_transfer)
+        val = self.get_with_counter(self.moves_transfer)
         if val is not None:
             updating_mon = self.trader.other_pokemon.pokemon[self.trader.other_pokemon.get_last_mon_index()]
             data = [updating_mon.get_species()] + val
@@ -100,7 +114,7 @@ class GSCTradingClient:
         for i in range(4):
             val[i] = self.trader.own_pokemon.pokemon[self.trader.own_pokemon.get_last_mon_index()].get_move(i)
             val[4+i] = self.trader.own_pokemon.pokemon[self.trader.own_pokemon.get_last_mon_index()].get_pp(i)
-        self.connection.send_data(self.moves_transfer, val)
+        self.send_with_counter(self.moves_transfer, val)
     
     def send_with_counter(self, dest, data):
         """
@@ -258,6 +272,10 @@ class GSCTradingClient:
         """
         mon = self.get_with_counter(self.pool_transfer)
         if mon is not None:
+            if len(mon) == 1:
+                print(GSCTradingStrings.pool_fail_str)
+                self.trader.kill_function()
+                
             # Applies the checks to the received data.
             received_mon = self.utils_class.single_mon_from_data(self.trader.checks, mon)
                 

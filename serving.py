@@ -96,6 +96,7 @@ class PoolTradeServer:
         self.last_success = None
         self.clear_pool = True
         self.hll = HighLevelListener()
+        self.hll.set_valid_transfers(self.trading_client_class.possible_transfers)
         self.mon_index = None
         self.received_mon = None
         self.received_accepted = None

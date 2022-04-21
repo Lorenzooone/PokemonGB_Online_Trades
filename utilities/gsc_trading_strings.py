@@ -44,6 +44,7 @@ class GSCTradingStrings:
     success_wait_str = "\nWaiting for trade confirmation..."
     close_str = "\nClosing the trade..."
     close_on_next_str = "\nOne of the players wants to close the trade.\nEnabled auto-closing on the next selection..."
+    pool_fail_str = "\nThe Pool currently seems to have no free slots. Please try again later..."
     quit_trade_str = "\nYou should now quit the current trade."
     waiting_synchro_str = "\nWaiting for the other player to be synchronized..."
     arrived_synchro_str = "\nThe other player arrived. Starting party information trading..."
