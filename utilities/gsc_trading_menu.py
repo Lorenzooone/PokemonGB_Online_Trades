@@ -17,7 +17,8 @@ class GSCTradingMenu:
         self.server = [args.server_host, args.server_port]
         self.buffered = args.buffered
         self.is_emulator = is_emulator
-        self.emulator = [args.emulator_host, args.emulator_port]
+        if is_emulator:
+            self.emulator = [args.emulator_host, args.emulator_port]
         self.do_sanity_checks = args.do_sanity_checks
         self.kill_on_byte_drops = args.kill_on_byte_drops
         self.verbose = args.verbose

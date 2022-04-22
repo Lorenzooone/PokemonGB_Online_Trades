@@ -2,8 +2,7 @@
 import signal
 import os
 from utilities.bgb_link_cable_server import BGBLinkCableServer
-from utilities.p2p_connection import P2PConnection
-from utilities.websocket_client import PoolTradeRunner
+from utilities.websocket_client import PoolTradeRunner, ProxyConnectionRunner
 from time import sleep
 from utilities.gsc_trading import GSCTrading
 from utilities.rby_trading import RBYTrading
@@ -17,7 +16,7 @@ class PokeTrader:
         self.curr_recv = None
         self._server = BGBLinkCableServer(self.update_data, menu, kill_function)
         if menu.trade_type == GSCTradingStrings.two_player_trade_str:
-            self.connection = P2PConnection(menu, kill_function)
+            self.connection = ProxyConnectionRunner(menu, kill_function)
         elif menu.trade_type == GSCTradingStrings.pool_trade_str:
             self.connection = PoolTradeRunner(menu, kill_function)
 

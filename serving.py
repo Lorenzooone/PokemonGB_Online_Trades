@@ -15,8 +15,8 @@ from utilities.gsc_trading_strings import GSCTradingStrings
 from utilities.gsc_trading_data_utils import *
 from utilities.rby_trading_data_utils import *
 
-link_rooms = [{},{}]
-user_pools = [{},{}]
+total_rooms = 100000
+link_rooms = [[set()]*total_rooms,[set()]*total_rooms]
 mons = [[],[]]
 in_use_mons = [set(),set()]
 
@@ -63,6 +63,8 @@ class ServerUtils:
         Returns the pokémon in that slot.
         """
         while index is None:
+            if len(in_use_mons[gen]) == len(mons[gen]):
+                return None, None
             rnd = Random()
             rnd.seed()
             new_index = rnd.randint(0,len(mons[gen])-1)
@@ -142,7 +144,10 @@ class PoolTradeServer:
             self.mon_index = None
             self.clear_pool = False
         self.mon_index, mon = ServerUtils.get_mon_index(self.mon_index, self.gen)
-        return self.hll.prepare_send_data(self.trading_client_class.pool_transfer, [self.own_id] + self.utils_class.single_mon_to_data(mon[0], mon[1]))
+        if self.mon_index is None:
+            return self.hll.prepare_send_data(self.trading_client_class.pool_transfer, [self.own_id] + [self.trading_client_class.pool_fail_value])
+        else:
+            return self.hll.prepare_send_data(self.trading_client_class.pool_transfer, [self.own_id] + self.utils_class.single_mon_to_data(mon[0], mon[1]))
     
     def handle_get_accepted(self):
         """
@@ -222,6 +227,33 @@ class PoolTradeServer:
             id = data[0]
             self.received_success = [id, data[1]]
         return None
+        
+class ProxyLinkServer:
+    """
+    Class which handles the 2-player trading part.
+    """
+    
+    def __init__(self, gen, ws):
+        checks_class = RBYChecks
+        self.trading_client_class = RBYTradingClient
+        self.utils_class = RBYUtils
+        if gen == 1:
+            checks_class = GSCChecks
+            self.trading_client_class = GSCTradingClient
+            self.utils_class = GSCUtils
+        self.other = None
+        self.other_ws = None
+        self.own_ws = ws
+        self.hll = HighLevelListener()
+        self.hll.set_valid_transfers(self.trading_client_class.possible_transfers)
+    
+    async def process(self, data):
+        """
+        Processes the data. If valid, sends it to the other websocket.
+        """
+        request = self.hll.is_received_valid(data)
+        if request is not None:
+            await self.other_ws.send(data)
     
 class WebsocketServer (threading.Thread):
     '''
@@ -237,7 +269,7 @@ class WebsocketServer (threading.Thread):
         ServerUtils.load_mons(self.checks[0], 0)
         ServerUtils.load_mons(self.checks[1], 1)
 
-    async def link_function(websocket, data, path):
+    async def link_function(websocket, data, path, link_proxy):
         '''
         Handler which either registers a client to a room, or links
         two clients together.
@@ -248,48 +280,38 @@ class WebsocketServer (threading.Thread):
         if len(path) >= 12:
             gen = WebsocketServer.get_gen(path)
             room = int(path[7:12])
-            valid = True
-            try:
-                ip = ipaddress.ip_address(data.split(":")[0])
-            except ValueError:
-                if data.split(":")[0] != "localhost":
-                    valid = False
-            if valid:
-                if room not in link_rooms[gen].keys():
-                    link_rooms[gen][room] = [data, websocket]
-                else:
-                    info = link_rooms[gen].pop(room)
-                    rnd = Random()
-                    rnd.seed()
-                    user = rnd.randint(0,1)
-                    repl = ["SERVER", "CLIENT"]
-                    if user == 0:
-                        repl = ["CLIENT", "SERVER"]
-                    reply_old = repl[0] + data
-                    reply_new = repl[1] + info[0]
-                    await info[1].send(reply_old)
-                    await websocket.send(reply_new)
-        return room
+            if link_proxy is None:
+                link_proxy = ProxyLinkServer(gen, websocket)
+            if link_proxy.other_ws is None:
+                if len(link_rooms[gen][room]) == 0:
+                    if link_proxy not in link_rooms[gen][room]:
+                        link_rooms[gen][room].add(link_proxy)
+                elif link_proxy not in link_rooms[gen][room]:
+                    other_proxy = link_rooms[gen][room].pop()
+                    other_proxy.other_ws = link_proxy.own_ws
+                    other_proxy.other = link_proxy
+                    link_proxy.other = other_proxy
+                    link_proxy.other_ws = other_proxy.own_ws
+                    repl = ["CLIENT", "CLIENT"]
+                    reply_old = repl[0]
+                    reply_new = repl[1]
+                    await link_proxy.other_ws.send(reply_old)
+                    await link_proxy.own_ws.send(reply_new)
+            else:
+                await link_proxy.process(data)
+        return room, link_proxy
     
-    async def pool_function(websocket, data, room, path):
+    async def pool_function(websocket, data, path, pool_trader):
         '''
         Handler which handles pool trading messages.
         '''
         gen = WebsocketServer.get_gen(path)
-        # Assign an ID to the user
-        if room >= 100000:
-            rnd = Random()
-            rnd.seed()
-            completed = False
-            while not completed:
-                room = rnd.randint(0,99999)
-                if not room in user_pools[gen].keys():
-                    user_pools[gen][room] = PoolTradeServer(gen)
-                    completed = True
+        if pool_trader is None:
+            pool_trader = PoolTradeServer(gen)
         
-        await user_pools[gen][room].process(data, websocket)
+        await pool_trader.process(data, websocket)
         
-        return room
+        return pool_trader
     
     def get_gen(path):
         gen = int(path[5]) - 1
@@ -299,15 +321,22 @@ class WebsocketServer (threading.Thread):
             gen = 0
         return gen
         
-    def cleaner(identifier, path):
+    async def cleaner(identifier, processer, path):
         gen = WebsocketServer.get_gen(path)
-        if path.startswith("/link") and identifier in link_rooms[gen].keys():
-            link_rooms[gen].pop(identifier)
-        if path.startswith("/pool") and identifier in user_pools[gen].keys():
-            pool = user_pools[gen].pop(identifier)
-            if pool.mon_index is not None:
-                if pool.mon_index in in_use_mons[gen]:
-                    in_use_mons[gen].remove(pool.mon_index)
+        if path.startswith("/link"):
+            if processer in link_rooms[gen][identifier]:
+                link_rooms[gen][identifier].remove(processer)
+            if processer.other_ws is not None:
+                other = processer.other
+                processer.other = None
+                processer.other_ws = None
+                other.other = None
+                other.other_ws = None
+                await other.own_ws.close()
+        if path.startswith("/pool"):
+            if processer.mon_index is not None and not processer.clear_pool:
+                if processer.mon_index in in_use_mons[gen]:
+                    in_use_mons[gen].remove(processer.mon_index)
 
     async def handler(websocket, path):
         """
@@ -315,21 +344,22 @@ class WebsocketServer (threading.Thread):
         the connection active.
         """
         curr_room = 100000
+        processer = None
         while True:
             try:
                 data = await websocket.recv()
             except websockets.ConnectionClosed:
                 print(f"Terminated")
-                WebsocketServer.cleaner(curr_room, path)
+                await WebsocketServer.cleaner(curr_room, processer, path)
                 break
             except Exception as e:
                 print('Websocket server error:', str(e))
-                WebsocketServer.cleaner(curr_room, path)
+                await WebsocketServer.cleaner(curr_room, processer, path)
                 break
             if path.startswith("/link"):
-                curr_room = await WebsocketServer.link_function(websocket, data, path)
+                curr_room, processer = await WebsocketServer.link_function(websocket, data, path, processer)
             if path.startswith("/pool"):
-                curr_room = await WebsocketServer.pool_function(websocket, data, curr_room, path)
+                processer = await WebsocketServer.pool_function(websocket, data, path, processer)
                 
     def run(self):
         """

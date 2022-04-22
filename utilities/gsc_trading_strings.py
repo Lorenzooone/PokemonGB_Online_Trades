@@ -66,7 +66,7 @@ class GSCTradingStrings:
     pool_receive_data_str = "\nGetting the Pool's trade offer..."
     pool_recycle_data_str = "\nReusing the previous Pool's trade offer..."
     two_player_trade_str = "2P"
-    pool_trade_str = "PS"
+    pool_trade_str = "PT"
     accepted_str = "Accept"
     decline_str = "Decline"
     yes_no_str = 'Choice (y = Yes, n=No): '

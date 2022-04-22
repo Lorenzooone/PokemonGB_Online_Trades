@@ -7,6 +7,24 @@ from time import sleep
 from .gsc_trading_strings import GSCTradingStrings
 from .high_level_listener import HighLevelListener
 
+class ProxyConnectionRunner (threading.Thread):
+    """
+    Class for running the websocket as a standalone piece.
+    """
+    SLEEP_TIMER = 0.01
+    
+    def __init__(self, menu, kill_function):
+        threading.Thread.__init__(self)
+        self.setDaemon(True)
+        self.room = menu.room
+        self.gen = menu.gen
+        self.hll = HighLevelListener()
+        self.kill_function = kill_function
+        self.ws = WebsocketClient(menu.server[0], menu.server[1], kill_function)
+
+    def run(self):
+        self.ws.get_peer(self.hll, self.room, self.gen)
+
 class PoolTradeRunner (threading.Thread):
     """
     Class for running the websocket as a standalone piece.
@@ -37,7 +55,7 @@ class WebsocketClient:
         WebsocketClient.port = port
         WebsocketClient.kill_function = kill_function
 
-    async def get_peer_server_connect(serving_host, serving_port, room, gen):
+    async def get_peer_server_connect(other, loop, room, gen):
         """
         Function which tries to get a P2P connection to another client
         by registering to a room in the websocket server.
@@ -45,9 +63,9 @@ class WebsocketClient:
         """
         try:
             async with websockets.connect("ws://"+ WebsocketClient.host +":" + str(WebsocketClient.port) + "/link" + str(gen) + "/" +str(room).zfill(5), ping_interval=None) as websocket:
-                await websocket.send(serving_host + ":" + str(serving_port))
+                await websocket.send("")
                 data = await websocket.recv()
-                return data
+                await WebsocketClient.handler(websocket, other, loop)
         except Exception as e:
             print(GSCTradingStrings.websocket_client_error_str, str(e))
             WebsocketClient.kill_function()
@@ -90,13 +108,13 @@ class WebsocketClient:
             print(GSCTradingStrings.websocket_client_error_str, str(e))
             WebsocketClient.kill_function()
     
-    def get_peer(self, serving_host, serving_port, room, gen):
+    def get_peer(self, other, room, gen):
         """
         Calls get_peer_server_connect and waits for it.
         """
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
-        return loop.run_until_complete(WebsocketClient.get_peer_server_connect(serving_host, serving_port, room, gen))
+        return loop.run_until_complete(WebsocketClient.get_peer_server_connect(other, loop, room, gen))
     
     def get_pool(self, other, gen):
         """
