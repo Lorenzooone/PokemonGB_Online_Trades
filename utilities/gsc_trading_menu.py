@@ -7,7 +7,7 @@ class GSCTradingMenu:
     """
     Class used to handle the various possible menus.
     """
-    default_server = ["localhost", 11111]
+    default_server = ["pokemon-gb-online-trades.herokuapp.com", None]
     default_emulator = ["localhost", 8765]
 
     def __init__(self, is_emulator=False):

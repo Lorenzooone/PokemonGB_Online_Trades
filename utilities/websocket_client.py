@@ -54,6 +54,9 @@ class WebsocketClient:
         WebsocketClient.host = host
         WebsocketClient.port = port
         WebsocketClient.kill_function = kill_function
+        WebsocketClient.ws_base_str = "ws://"+ WebsocketClient.host
+        if WebsocketClient.port is not None:
+            WebsocketClient.ws_base_str += ":" + str(WebsocketClient.port)
 
     async def get_peer_server_connect(other, loop, room, gen):
         """
@@ -62,7 +65,7 @@ class WebsocketClient:
         :param room: Room in which the client registers.
         """
         try:
-            async with websockets.connect("ws://"+ WebsocketClient.host +":" + str(WebsocketClient.port) + "/link" + str(gen) + "/" +str(room).zfill(5), ping_interval=None) as websocket:
+            async with websockets.connect(WebsocketClient.ws_base_str + "/link" + str(gen) + "/" +str(room).zfill(5), ping_interval=None) as websocket:
                 await websocket.send("")
                 data = await websocket.recv()
                 await WebsocketClient.handler(websocket, other, loop)
@@ -102,7 +105,7 @@ class WebsocketClient:
         Function which tries to get a websocket connection to the server.
         """
         try:
-            async with websockets.connect("ws://"+ WebsocketClient.host +":" + str(WebsocketClient.port) + "/pool" + str(gen), ping_interval=None) as websocket:
+            async with websockets.connect(WebsocketClient.ws_base_str + "/pool" + str(gen), ping_interval=None) as websocket:
                 await WebsocketClient.handler(websocket, other, loop)
         except Exception as e:
             print(GSCTradingStrings.websocket_client_error_str, str(e))

@@ -515,6 +515,9 @@ class GSCTradingPokémonInfo:
 
     def get_curr_hp(self):
         return GSCUtilsMisc.read_short(self.values, self.curr_hp_pos)
+
+    def heal(self):
+        GSCUtilsMisc.write_short(self.values, self.curr_hp_pos, self.get_max_hp())
     
     def get_max_hp(self):
         return GSCUtilsMisc.read_short(self.values, self.stats_pos)

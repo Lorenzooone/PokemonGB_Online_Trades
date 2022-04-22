@@ -252,18 +252,26 @@ class ProxyLinkServer:
         """
         request = self.hll.is_received_valid(data)
         if request is not None:
-            await self.other_ws.send(data)
+            if (self.other is not None) and (self.other.other == self):
+                await self.other_ws.send(data)
+            else:
+                self.other = None
+                self.other_ws = None
+                await self.own_ws.close()
     
 class WebsocketServer (threading.Thread):
     '''
     Class which handles responding to the websocket requests.
     '''
     
-    def __init__(self, host="0.0.0.0", port=11111):
+    def __init__(self, host="", port=11111):
         threading.Thread.__init__(self)
         self.setDaemon(True)
         self.host = host
-        self.port = port
+        try:
+            self.port = int(os.environ["PORT"])
+        except KeyError as e:
+            self.port = port
         self.checks = [RBYChecks([0,0,0], True), GSCChecks([0,0,0], True)]
         ServerUtils.load_mons(self.checks[0], 0)
         ServerUtils.load_mons(self.checks[1], 1)
