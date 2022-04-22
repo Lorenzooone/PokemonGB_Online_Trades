@@ -26,7 +26,9 @@ Said checks can also be removed, if one so chooses.
 
 ## Installing the prerequisite packages
 Run `pip install websockets`.
-If using the USB adapter, also run:
+
+If you are using the USB adapter, also run:
+
 `pip install pyUSB` and `pip install winusbcdc`.
 
 ## Using the GB Link Cable to USB Adapter
