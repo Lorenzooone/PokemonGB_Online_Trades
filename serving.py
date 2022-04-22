@@ -7,7 +7,6 @@ import signal
 import os
 from random import Random
 from time import sleep
-import ipaddress
 from utilities.high_level_listener import HighLevelListener
 from utilities.gsc_trading import GSCTradingClient
 from utilities.rby_trading import RBYTradingClient
