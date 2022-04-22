@@ -259,7 +259,7 @@ class WebsocketServer (threading.Thread):
     Class which handles responding to the websocket requests.
     '''
     
-    def __init__(self, host="localhost", port=11111):
+    def __init__(self, host="0.0.0.0", port=11111):
         threading.Thread.__init__(self)
         self.setDaemon(True)
         self.host = host

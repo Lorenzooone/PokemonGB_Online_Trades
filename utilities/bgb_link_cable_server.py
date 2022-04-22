@@ -9,6 +9,7 @@ from .gsc_trading_data_utils import GSCUtilsMisc
 
 # Implements the BGB link cable protocol
 # See https://bgb.bircd.org/bgblink.html
+# Base from: https://github.com/mwpenny/gbplay
 
 class BGBLinkCableSender(threading.Thread):
     SLEEP_TIMER = 0.01
