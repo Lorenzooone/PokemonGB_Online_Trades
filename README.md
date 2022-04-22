@@ -25,6 +25,8 @@ Each byte which is sent to your Device is cleaned using Sanity Checks. They make
 Said checks can also be removed, if one so chooses.
 
 ## Installing the prerequisite packages
+Python >= 3.6 is required in order to run this.
+
 Run `pip install websockets`.
 
 If you are using the USB adapter, also run:
