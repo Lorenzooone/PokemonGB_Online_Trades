@@ -52,7 +52,7 @@ class RBYTradingClient(GSCTradingClient):
                 updating_mon.set_move(i, data[i+1], max_pp=False)
                 updating_mon.set_pp(i, data[i+5])
             if data[0] != updating_mon.get_species():
-                self.trader.other_pokemon.evolution_procedure(self.trader.other_pokemon.get_last_mon_index(), data[i])
+                self.trader.other_pokemon.evolution_procedure(self.trader.other_pokemon.get_last_mon_index(), data[0])
         return val
         
     def send_move_data_only(self):

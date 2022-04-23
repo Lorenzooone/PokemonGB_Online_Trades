@@ -197,7 +197,7 @@ class GSCTradingClient:
                 actual_data = ret[1:]
                 mon = self.utils_class.single_mon_from_data(self.trader.checks, actual_data)
                 
-                if mon is not None:    
+                if mon is not None:
                     # Searches for the pokémon. If it's not found, it uses
                     # the failsafe value. If the sanity checks are on,
                     # it will prepare to close the current trade offer
@@ -211,6 +211,8 @@ class GSCTradingClient:
                     if self.trader.checks.do_sanity_checks:
                         valid = False
 
+                if not valid:
+                    self.verbose_print(GSCTradingStrings.auto_decline_str)
                 ret = [self.trader.convert_index(found_index), valid]
             else:
                 # Received data for closing the trade

@@ -61,6 +61,7 @@ class GSCTradingStrings:
     move_other_data_str = "\nThe other player's input was required.\nWaiting for their updated moves data..."
     send_move_other_data_str = "\nSending your updated moves data to the other player."
     no_mail_other_data_str = "\nThe other player's party has no mail.\nSkipping receiving their mail data."
+    auto_decline_str = "\nSomething weird was detected with the other player's data.\nAutomatically sending Decline."
     mail_other_data_str = "\nThe other player's party has mail.\nWaiting for them to send it."
     send_mail_other_data_str = "\nSending your mail data to the other player."
     pool_receive_data_str = "\nGetting the Pool's trade offer..."

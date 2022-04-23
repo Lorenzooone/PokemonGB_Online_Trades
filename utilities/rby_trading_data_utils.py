@@ -108,7 +108,7 @@ class RBYTradingPokémonInfo(GSCTradingPokémonInfo):
     evs_pos = 0x11
     ivs_pos = 0x1B
     
-    no_moves_equality_ranges = [range(0,8), range(0xC,0x1D), range(0x21, pokemon_data_len)]
+    no_moves_equality_ranges = [range(0,3), range(4,8), range(0xC,0x1D), range(0x21, pokemon_data_len)]
     all_lengths = [pokemon_data_len, ot_name_len, nickname_len, mail_len, sender_len]
     
     def __init__(self, data, start, length=pokemon_data_len):
