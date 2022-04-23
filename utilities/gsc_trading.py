@@ -346,6 +346,8 @@ class GSCTrading:
     sleep_timer = 0.01
     enter_room_states = [[0x01, 0xFE, 0x61, 0xD1, 0xFE], [{0xFE}, {0x61}, {0xD1}, {0xFE}, {0xFE}]]
     start_trading_states = [[0x75, 0x75, 0x76], [{0x75}, {0}, {0xFD}]]
+    success_values = {0x70, 0x71, 0x72, 0x73, 0x74, 0x75, 0x7F}
+    possible_indexes = {0x70, 0x71, 0x72, 0x73, 0x74, 0x75, 0x7F}
     max_consecutive_no_data = 0x100
     next_section = 0xFD
     no_input = 0xFE
@@ -570,11 +572,27 @@ class GSCTrading:
             if(target == self.stop_trade and next == target):
                 target = 0
 
-    def wait_for_input(self, next):
+    def wait_for_choice(self, next):
         """
         Waits for an useful value.
         """
-        while(next == self.no_input or next == self.no_data):
+        while(next not in self.possible_indexes):
+            next = self.swap_byte(self.no_input)
+        return next
+
+    def wait_for_accept_decline(self, next):
+        """
+        Waits for an useful value.
+        """
+        while((next != self.accept_trade) and (next != self.decline_trade)):
+            next = self.swap_byte(self.no_input)
+        return next
+
+    def wait_for_success(self, next):
+        """
+        Waits for success.
+        """
+        while(next not in self.success_values):
             next = self.swap_byte(self.no_input)
         return next
 
@@ -675,7 +693,7 @@ class GSCTrading:
         while not trade_completed:
             # Get the choice
             next = self.no_input
-            sent_mon = self.wait_for_input(next)
+            sent_mon = self.wait_for_choice(next)
 
             if not close:
                 if autoclose_on_stop and self.is_choice_stop(sent_mon):
@@ -703,7 +721,7 @@ class GSCTrading:
                 # Get whether the trade was declined or not
                 next = self.wait_for_no_data(next, received_choice)
                 next = self.wait_for_no_input(next)
-                accepted = self.wait_for_input(next)
+                accepted = self.wait_for_accept_decline(next)
                 
                 # Check validity of trade
                 valid_trade = received_valid
@@ -741,7 +759,7 @@ class GSCTrading:
                     self.check_reset_trade(to_server)
 
                     # Conclude the trade successfully
-                    next = self.wait_for_input(next)
+                    next = self.wait_for_success(next)
 
                     # Send it to the other player
                     self.verbose_print(GSCTradingStrings.success_send_str)
