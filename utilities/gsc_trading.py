@@ -98,7 +98,7 @@ class GSCTradingClient:
         if val is not None:
             updating_mon = self.trader.other_pokemon.pokemon[self.trader.other_pokemon.get_last_mon_index()]
             data = [updating_mon.get_species()] + val
-            data = self.trader.checks.apply_checks_to_data(self.trader.checks.moves_checks_map_path, data)
+            data = self.trader.checks.apply_checks_to_data(self.trader.checks.moves_checks_map, data)
             for i in range(4):
                 updating_mon.set_move(i, data[i+1], max_pp=False)
                 updating_mon.set_pp(i, data[i+5])

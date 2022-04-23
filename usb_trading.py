@@ -73,11 +73,14 @@ signal.signal(signal.SIGINT, signal_handler)
 
 # The execution path
 try:
-    devices = list(usb.core.find(find_all=True,idVendor=0xcafe, idProduct=0x4011))
-    for d in devices:
-        #print('Device: %s' % d.product)
-        dev = d
-    
+    try:
+        devices = list(usb.core.find(find_all=True,idVendor=0xcafe, idProduct=0x4011))
+        for d in devices:
+            #print('Device: %s' % d.product)
+            dev = d
+    except usb.core.NoBackendError as e:
+        pass
+        
     sender = sendByte
     receiver = receiveByte
 

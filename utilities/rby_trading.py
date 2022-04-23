@@ -47,7 +47,7 @@ class RBYTradingClient(GSCTradingClient):
         val = self.get_with_counter(self.moves_transfer)
         if val is not None:
             updating_mon = self.trader.other_pokemon.pokemon[self.trader.other_pokemon.get_last_mon_index()]
-            data = self.trader.checks.apply_checks_to_data(self.trader.checks.moves_checks_map_path, val)
+            data = self.trader.checks.apply_checks_to_data(self.trader.checks.moves_checks_map, val)
             for i in range(4):
                 updating_mon.set_move(i, data[i+1], max_pp=False)
                 updating_mon.set_pp(i, data[i+5])
