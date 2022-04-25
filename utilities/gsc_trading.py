@@ -350,12 +350,15 @@ class GSCTrading:
     start_trading_states = [[0x75, 0x75, 0x76], [{0x75}, {0}, {0xFD}]]
     success_values = {0x70, 0x71, 0x72, 0x73, 0x74, 0x75, 0x7F}
     possible_indexes = {0x70, 0x71, 0x72, 0x73, 0x74, 0x75, 0x7F}
+    fillers = {}
+    filler_value = 0xFE00
+    last_filler_value = 0xFEFF
     max_consecutive_no_data = 0x100
     next_section = 0xFD
     no_input = 0xFE
     no_data = 0
     special_sections_len = [0xA, 0x1BC, 0x24C]
-    drop_bytes_checks = [[0xA, 0x1B9, 0x1E6], [next_section, next_section, no_input]]
+    drop_bytes_checks = [[0xA, 0x1B9, 0x1E6], [next_section, next_section, no_input], [0,0,0]]
     stop_trade = 0x7F
     first_trade_index = 0x70
     decline_trade = 0x71
@@ -421,6 +424,10 @@ class GSCTrading:
                 if byte == self.drop_bytes_checks[1][section_index]:
                     return True
             else:
+                for j in range(self.drop_bytes_checks[2][section_index]):
+                    if byte == self.drop_bytes_checks[1][section_index]:
+                        return True
+                    byte = self.swap_byte(self.no_data)
                 if byte != self.drop_bytes_checks[1][section_index]:
                     return True
         return False
@@ -478,13 +485,25 @@ class GSCTrading:
         if buffered:
             buf = [next]
             # If the trade is buffered, just send the data from the buffer
-            for i in range(length-1):
+            i = 0
+            while i < (length-1):
                 if send_data is not None:
                     next = self.checks.checks_map[index][i](send_data[i])
                     send_data[i] = next
-                next = self.swap_byte(next)
-                self.verbose_print(GSCTradingStrings.transfer_to_hardware_str.format(index=index+1, completion=GSCTradingStrings.x_out_of_y_str(i+1, length)), end='')
-                buf += [next]
+                if ((i+1) not in self.fillers.keys()) or (index != self.fillers[i+1][2]):
+                    next = self.swap_byte(next)
+                    self.verbose_print(GSCTradingStrings.transfer_to_hardware_str.format(index=index+1, completion=GSCTradingStrings.x_out_of_y_str(i+1, length)), end='')
+                    buf += [next]
+                # Handle fillers
+                else:
+                    filler_len = self.fillers[i+1][0]
+                    filler_val = self.fillers[i+1][1]
+                    if send_data is not None:
+                        for j in range(filler_len):
+                            send_data[i + 1 + j] = self.checks.checks_map[index][i + 1 + j](send_data[i + 1 + j])
+                    buf += ([filler_val] * filler_len)
+                    i += (filler_len - 1)
+                i += 1
             
             if send_data is not None:
                 # Send the last byte too
@@ -492,6 +511,8 @@ class GSCTrading:
                 send_data[length-1] = next
             self.swap_byte(next)
             self.verbose_print(GSCTradingStrings.transfer_to_hardware_str.format(index=index+1, completion=GSCTradingStrings.x_out_of_y_str(length, length)), end='')
+            for j in range(self.drop_bytes_checks[2][index]):
+                self.swap_byte(self.no_data)
             other_buf = send_data
         else:
             # If the trade is synchronous, prepare small send buffers
@@ -499,7 +520,9 @@ class GSCTrading:
             buf = [next]
             other_buf = []
             send_buf = [[0,next],[0xFFFF,0xFF],[index]]
-            for i in range(length + 1):
+            recv_data = {}
+            i = 0
+            while i < (length + 1):
                 found = False
                 # Send the current byte (and the previous one) to the
                 # other client
@@ -507,33 +530,44 @@ class GSCTrading:
                 while not found:
                     received = self.comms.get_trading_data()
                     if received is not None:
-                        recv_buf = self.read_entire_data(received)
-                        if recv_buf[i&1] is not None:
-                            byte_num = recv_buf[i&1][0]
-                            # Check whether the other client's data has
-                            # the byte the device needs
-                            if byte_num == i and i != length:
-                                # If it does, clean it and send it
-                                cleaned_byte = self.checks.checks_map[index][i](recv_buf[i&1][1])
+                        if i not in recv_data.keys():
+                            recv_buf = self.read_entire_data(received)
+                            # Get all the bytes we can consecutively send to the device
+                            recv_data = self.get_swappable_bytes(recv_buf, length, index)
+                        if i in recv_data.keys() and (i < length):
+                            # Clean it and send it
+                            cleaned_byte = self.checks.checks_map[index][i](recv_data[i])
+                            next_i = i+1
+                            # Handle fillers
+                            if next_i in self.fillers.keys() and index == self.fillers[next_i][2]:
+                                filler_len = self.fillers[next_i][0]
+                                filler_val = self.fillers[next_i][1]
+                                send_buf[(next_i)&1][0] = self.filler_value + filler_len
+                                send_buf[(next_i)&1][1] = filler_val
+                                buf += ([filler_val] * filler_len)
+                                for j in range(filler_len):
+                                    other_buf += [self.checks.checks_map[index][next_i + j](filler_val)]
+                                i += (filler_len - 1)
+                            else:
                                 next = self.swap_byte(cleaned_byte)
                                 self.verbose_print(GSCTradingStrings.transfer_to_hardware_str.format(index=index+1, completion=GSCTradingStrings.x_out_of_y_str(i+1, length)), end='')
                                 # This will, in turn, get the next byte
                                 # the other client needs
-                                send_buf[(i+1)&1][0] = i + 1
-                                send_buf[(i+1)&1][1] = next
-                                buf += [next]
+                                send_buf[(next_i)&1][0] = next_i
+                                send_buf[(next_i)&1][1] = next
+                                self.remove_filler(send_buf, next_i)
                                 other_buf += [cleaned_byte]
                                 # Check for "bad transfer" clues
                                 self.check_bad_data(cleaned_byte, i, index)
-                                self.check_bad_data(next, i + 1, index)
-                                found = True
-                            # Handle the last byte differently
-                            elif byte_num == i:
-                                found = True
-                            elif i == length and recv_buf[2][0] == index + 1:
-                                found = True
+                                self.check_bad_data(next, next_i, index)
+                                buf += [next]
+                            found = True
+                        # Handle the last byte differently
+                        elif i in recv_data.keys() and (i >= length):
+                            found = True
                     if not found:
                         self.sleep_func()
+                i += 1
         self.verbose_print(GSCTradingStrings.separate_section_str, end='')
         return buf, other_buf
     
@@ -548,6 +582,45 @@ class GSCTrading:
         if self.extremely_verbose:
             print(GSCTradingStrings.byte_transfer_str.format(send_data=send_data, recv=recv))
         return recv
+    
+    def prepare_single_entry(self, recv_buf, scanning_index, length, index, ret):
+        """
+        Tries to read a single synchronous entry.
+        """
+        if recv_buf[scanning_index] is not None:
+            byte_num = recv_buf[scanning_index][0]
+            if byte_num <= length:
+                if (byte_num == 0) and (recv_buf[2][0] == index + 1):
+                    ret[length] = recv_buf[scanning_index][1]
+                else:
+                    ret[byte_num] = recv_buf[scanning_index][1]
+            elif byte_num > self.filler_value and byte_num <= self.last_filler_value:
+                # Try to handle fillers by rapidly swapping their bytes
+                previous_scanning_index = (scanning_index+1) & 1
+                total_bytes = byte_num - self.filler_value
+                byte_num = recv_buf[previous_scanning_index][0]
+                for j in range(total_bytes):
+                    ret[byte_num + 1 + j] = recv_buf[scanning_index][1]
+        
+    def remove_filler(self, send_buf, i):
+        """
+        Removes the filler from the send buffer when a new byte is read.
+        Also prevents desyncs.
+        """
+        curr_byte_num = send_buf[i&1][0]
+        byte_num = send_buf[(i+1)&1][0]
+        if byte_num > self.filler_value and byte_num <= self.last_filler_value:
+            send_buf[(i+1)&1][0] = curr_byte_num-1
+    
+    def get_swappable_bytes(self, recv_buf, length, index):
+        """
+        Returns the maximum amount of bytes we can swap freely.
+        Tries to speedup the transfer a bit.
+        """
+        ret = {}
+        for i in range(2):
+            self.prepare_single_entry(recv_buf, i, length, index, ret)
+        return ret
     
     def read_entire_data(self, data):
         return [self.read_sync_data(data, 0), self.read_sync_data(data, 3), [data[6]]]

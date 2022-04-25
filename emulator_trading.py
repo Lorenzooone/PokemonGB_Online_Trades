@@ -5,7 +5,9 @@ from utilities.bgb_link_cable_server import BGBLinkCableServer
 from utilities.websocket_client import PoolTradeRunner, ProxyConnectionRunner
 from time import sleep
 from utilities.gsc_trading import GSCTrading
+from utilities.gsc_trading_jp import GSCTradingJP
 from utilities.rby_trading import RBYTrading
+from utilities.rby_trading_jp import RBYTradingJP
 from utilities.gsc_trading_menu import GSCTradingMenu
 from utilities.gsc_trading_strings import GSCTradingStrings
 
@@ -58,9 +60,15 @@ def transfer_func(p, menu):
         print(GSCTradingStrings.waiting_transfer_start_str)
     
     if menu.gen == 2:
-        trade_c = GSCTrading(p.sendByte, p.receiveByte, p.connection, menu, kill_function)
+        if menu.japanese:
+            trade_c = GSCTradingJP(p.sendByte, p.receiveByte, p.connection, menu, kill_function)
+        else:
+            trade_c = GSCTrading(p.sendByte, p.receiveByte, p.connection, menu, kill_function)
     elif menu.gen == 1:
-        trade_c = RBYTrading(p.sendByte, p.receiveByte, p.connection, menu, kill_function)
+        if menu.japanese:
+            trade_c = RBYTradingJP(p.sendByte, p.receiveByte, p.connection, menu, kill_function)
+        else:
+            trade_c = RBYTrading(p.sendByte, p.receiveByte, p.connection, menu, kill_function)
     
     if menu.trade_type == GSCTradingStrings.two_player_trade_str:
         trade_c.player_trade(menu.buffered)

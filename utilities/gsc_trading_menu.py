@@ -16,6 +16,7 @@ class GSCTradingMenu:
         # Initialize the menu
         self.server = [args.server_host, args.server_port]
         self.buffered = args.buffered
+        self.japanese = args.japanese
         self.is_emulator = is_emulator
         if is_emulator:
             self.emulator = [args.emulator_host, args.emulator_port]
@@ -40,14 +41,15 @@ class GSCTradingMenu:
             "0": self.handle_exit_option,
             "1": self.handle_server_option,
             "2": self.handle_port_option,
-            "3": self.handle_sanity_option,
-            "4": self.handle_verbose_option,
-            "5": self.handle_buffered_option,
-            "6": self.handle_kill_on_byte_drop_option
+            "3": self.handle_japanese_option,
+            "4": self.handle_sanity_option,
+            "5": self.handle_verbose_option,
+            "6": self.handle_buffered_option,
+            "7": self.handle_kill_on_byte_drop_option
             }
         if is_emulator:
-            self.options_menu_handlers["7"] = self.handle_emulator_host_option
-            self.options_menu_handlers["8"] = self.handle_emulator_port_option
+            self.options_menu_handlers["8"] = self.handle_emulator_host_option
+            self.options_menu_handlers["9"] = self.handle_emulator_port_option
 
     def get_int(self, default_value):
         x = input()
@@ -152,6 +154,10 @@ class GSCTradingMenu:
         self.buffered = not self.buffered
         return False
     
+    def handle_japanese_option(self):
+        self.japanese = not self.japanese
+        return False
+    
     def handle_sanity_option(self):
         self.do_sanity_checks = not self.do_sanity_checks
         return False
@@ -176,6 +182,9 @@ class GSCTradingMenu:
         parser.add_argument("-b", "--buffered",
                             action="store_true", dest="buffered", default=False,
                             help="default to buffered trading instead of synchronous")
+        parser.add_argument("-j", "--japanese",
+                            action="store_true", dest="japanese", default=False,
+                            help="use it if your game is Japanese")
         parser.add_argument("-dsc", "--disable_sanity_checks",
                             action="store_false", dest="do_sanity_checks", default=True,
                             help="don't perform sanity checks for data sent to the device")

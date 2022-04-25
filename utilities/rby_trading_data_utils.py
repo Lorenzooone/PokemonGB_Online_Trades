@@ -179,6 +179,9 @@ class RBYTradingData(GSCTradingData):
         for i in range(self.get_party_size()):
             if mon.is_equal(self.pokemon[i]):
                 return i
+        for i in range(self.get_party_size()):
+            if mon.is_equal(self.pokemon[i], weak=True):
+                return i
         return None
 
     @GSCTradingData.check_pos_validity

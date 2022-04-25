@@ -6,7 +6,9 @@ import traceback
 import time
 import os
 from utilities.gsc_trading import GSCTrading
+from utilities.gsc_trading_jp import GSCTradingJP
 from utilities.rby_trading import RBYTrading
+from utilities.rby_trading_jp import RBYTradingJP
 from utilities.websocket_client import PoolTradeRunner, ProxyConnectionRunner
 from utilities.gsc_trading_menu import GSCTradingMenu
 from utilities.gsc_trading_strings import GSCTradingStrings
@@ -26,9 +28,15 @@ def transfer_func(sender, receiver):
         connection = PoolTradeRunner(menu, kill_function)
         
     if menu.gen == 2:
-        trade_c = GSCTrading(sender, receiver, connection, menu, kill_function)
+        if menu.japanese:
+            trade_c = GSCTradingJP(sender, receiver, connection, menu, kill_function)
+        else:
+            trade_c = GSCTrading(sender, receiver, connection, menu, kill_function)
     elif menu.gen == 1:
-        trade_c = RBYTrading(sender, receiver, connection, menu, kill_function)
+        if menu.japanese:
+            trade_c = RBYTradingJP(sender, receiver, connection, menu, kill_function)
+        else:
+            trade_c = RBYTrading(sender, receiver, connection, menu, kill_function)
     connection.start()
     
     if menu.trade_type == GSCTradingStrings.two_player_trade_str:

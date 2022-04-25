@@ -81,7 +81,7 @@ class RBYTrading(GSCTrading):
     possible_indexes = {0x60, 0x61, 0x62, 0x63, 0x64, 0x65, 0x6F}
     next_section = 0xFD
     no_input = 0xFE
-    drop_bytes_checks = [[0xA, 0x19F, 0xC5], [next_section, next_section, no_input]]
+    drop_bytes_checks = [[0xA, 0x19F, 0xC5], [next_section, next_section, no_input], [0,0,0]]
     stop_trade = 0x6F
     first_trade_index = 0x60
     decline_trade = 0x61

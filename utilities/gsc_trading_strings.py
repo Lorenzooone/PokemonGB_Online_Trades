@@ -8,6 +8,8 @@ class GSCTradingStrings:
     synchronous_str = "Synchronous"
     send_request = "S"
     get_request = "G"
+    set_japanese_str = "Set game as Japanese (Current: International)"
+    unset_japanese_str = "Set game as International (Current: Japanese)"
     active_sanity_checks_str = "Disable Sanity checks (Current: Enabled)"
     inactive_sanity_checks_str = "Enable Sanity checks (Current: Disabled)"
     active_kill_on_byte_drops_str = "Disable Crash on synchronous byte drop (Current: Enabled)"
@@ -91,16 +93,17 @@ class GSCTradingStrings:
                         "0) Exit (Default)\n"
                         "1) Server for connection: {server_host}\n"
                         "2) Port for connection: {server_port}\n"
-                        "3) {sanity_checks_str}\n"
-                        "4) Change Verbosity (Current: {verbose})\n"
+                        "3) {japanese_str}\n"
+                        "4) {sanity_checks_str}\n"
+                        "5) Change Verbosity (Current: {verbose})\n"
                         "\n=============== 2-Player trade Options ===============\n"
-                        "5) Change to {other_buffered} Trading (Current: {own_buffered})\n"
-                        "6) {kill_on_byte_drops_str}"
+                        "6) Change to {other_buffered} Trading (Current: {own_buffered})\n"
+                        "7) {kill_on_byte_drops_str}"
                         "{emulator_str}"
                         )
     emulator_options_str = ("\n\n=============== Emulator Options ===============\n"
-                            "7) Host for emulator connection: {emulator_host}\n"
-                            "8) Port for emulator connection: {emulator_port}"
+                            "8) Host for emulator connection: {emulator_host}\n"
+                            "9) Port for emulator connection: {emulator_port}"
                             )
     
     def int_to_three_str(integer):
@@ -143,6 +146,11 @@ class GSCTradingStrings:
     def top_menu_print():
         print(GSCTradingStrings.top_level_menu_str)
     
+    def get_japanese_str(japanese):
+        if japanese:
+            return GSCTradingStrings.unset_japanese_str
+        return GSCTradingStrings.set_japanese_str
+    
     def get_sanity_checks_str(sanity_checks):
         if sanity_checks:
             return GSCTradingStrings.active_sanity_checks_str
@@ -160,6 +168,7 @@ class GSCTradingStrings:
         
     def options_menu_print(options):
         print(GSCTradingStrings.options_menu_str.format(server_host=options.server[0], server_port=options.server[1],
+                                                     japanese_str=GSCTradingStrings.get_japanese_str(options.japanese),
                                                      sanity_checks_str=GSCTradingStrings.get_sanity_checks_str(options.do_sanity_checks),
                                                      verbose=options.verbose,
                                                      other_buffered=GSCTradingStrings.get_buffered_str(not options.buffered),

@@ -298,8 +298,10 @@ class GSCUtilsMisc:
             val = 0
         return val
     
-    def copy_to_data(data, pos, values):
-        data[pos:pos+len(values)] = values[:len(values)]
+    def copy_to_data(data, pos, values, length=None):
+        if length is None:
+            length = len(values)
+        data[pos:pos+length] = values[:length]
         
     def check_normal_list(checking_list, value):
         if value >= 0x100 or value < 0:
@@ -413,21 +415,25 @@ class GSCTradingPokémonInfo:
         self.mail_sender = None
         self._precalced_lengths = GSCUtilsMisc.calc_divide_lengths(self.all_lengths)
         self.utils_class = self.get_utils_class()
+        self.text_class = self.get_text_class()
     
     def get_utils_class(self):
         return GSCUtils
+    
+    def get_text_class(self):
+        return GSCTradingText
 
     def add_ot_name(self, data, start):
-        self.ot_name = GSCTradingText(data, start, length=self.ot_name_len)
+        self.ot_name = self.text_class(data, start, length=self.ot_name_len)
 
     def add_nickname(self, data, start):
-        self.nickname = GSCTradingText(data, start, length=self.nickname_len)
+        self.nickname = self.text_class(data, start, length=self.nickname_len)
 
     def add_mail(self, data, start):
-        self.mail = GSCTradingText(data, start, length=self.mail_len)
+        self.mail = self.text_class(data, start, length=self.mail_len)
         
     def add_mail_sender(self, data, start):
-        self.mail_sender = GSCTradingText(data, start, length=self.sender_len, data_start=4)
+        self.mail_sender = self.text_class(data, start, length=self.sender_len, data_start=3)
     
     def is_nicknamed(self):
         return not self.nickname.values_equal(self.utils_class.pokemon_names[self.get_species()])
@@ -525,7 +531,7 @@ class GSCTradingPokémonInfo:
     def has_mail(self):
         return self.utils_class.is_item_mail(self.get_item())
     
-    def is_equal(self, other):
+    def is_equal(self, other, weak=False):
         ranges = self.no_moves_equality_ranges
         for i in ranges:
             for j in i:
@@ -533,11 +539,12 @@ class GSCTradingPokémonInfo:
                     return False
         if not self.are_moves_and_pp_same(other):
             return False
-        if not (self.ot_name.values_equal(other.ot_name.values) and self.nickname.values_equal(other.nickname.values)):
-            return False
-        if self.has_mail():
-            if not (self.mail.values_equal(other.mail.values) and self.mail_sender.values_equal(other.mail_sender.values)):
+        if not weak:
+            if not (self.ot_name.values_equal(other.ot_name.values) and self.nickname.values_equal(other.nickname.values)):
                 return False
+            if self.has_mail():
+                if not (self.mail.values_equal(other.mail.values) and self.mail_sender.values_equal(other.mail_sender.values)):
+                    return False
         return True
     
     def get_same_moves(self):
@@ -634,6 +641,7 @@ class GSCTradingData:
     """
     trader_name_pos = 0
     trading_party_info_pos = 0xB
+    trading_party_final_pos = 0x12
     trader_info_pos = 0x13
     trading_pokemon_pos = 0x15
     trading_pokemon_ot_pos = 0x135
@@ -702,6 +710,9 @@ class GSCTradingData:
         """
         for i in range(self.get_party_size()):
             if mon.is_equal(self.pokemon[i]) and (self.is_mon_egg(i) == is_egg):
+                return i
+        for i in range(self.get_party_size()):
+            if mon.is_equal(self.pokemon[i], weak=True) and (self.is_mon_egg(i) == is_egg):
                 return i
         return None
 
@@ -791,19 +802,19 @@ class GSCTradingData:
         for i in range(2):
             data += [lengths[i]*[0]]
         data += [self.utils_class.no_mail_section[:len(self.utils_class.no_mail_section)]]
-        GSCUtilsMisc.copy_to_data(data[1], self.trader_name_pos, self.trader.values)
+        GSCUtilsMisc.copy_to_data(data[1], self.trader_name_pos, self.trader.values, self.trading_name_length)
         data[1][self.trading_party_info_pos] = self.get_party_size()
         GSCUtilsMisc.copy_to_data(data[1], self.trading_party_info_pos + 1, self.party_info.actual_mons)
-        data[1][0x12] = 0xFF
+        data[1][self.trading_party_final_pos] = 0xFF
         if self.trader_info is not None:
             GSCUtilsMisc.write_short(data[1], self.trader_info_pos, self.trader_info)
         for i in range(self.get_party_size()):
             GSCUtilsMisc.copy_to_data(data[1], self.trading_pokemon_pos + (i * self.trading_pokemon_length), self.pokemon[i].values)
-            GSCUtilsMisc.copy_to_data(data[1], self.trading_pokemon_ot_pos + (i * self.trading_name_length), self.pokemon[i].ot_name.values)
-            GSCUtilsMisc.copy_to_data(data[1], self.trading_pokemon_nickname_pos + (i * self.trading_name_length), self.pokemon[i].nickname.values)
+            GSCUtilsMisc.copy_to_data(data[1], self.trading_pokemon_ot_pos + (i * self.trading_name_length), self.pokemon[i].ot_name.values, self.trading_name_length)
+            GSCUtilsMisc.copy_to_data(data[1], self.trading_pokemon_nickname_pos + (i * self.trading_name_length), self.pokemon[i].nickname.values, self.trading_name_length)
             if self.pokemon[i].mail is not None:
                 GSCUtilsMisc.copy_to_data(data[2], self.trading_pokemon_mail_pos + (i * self.trading_mail_length), self.pokemon[i].mail.values)
-                GSCUtilsMisc.copy_to_data(data[2], self.trading_pokemon_mail_sender_pos + (i * self.trading_mail_sender_length), self.pokemon[i].mail_sender.values)
+                GSCUtilsMisc.copy_to_data(data[2], self.trading_pokemon_mail_sender_pos + (i * self.trading_mail_sender_length), self.pokemon[i].mail_sender.values, self.trading_mail_sender_length)
         return data
     
 class GSCChecks:
