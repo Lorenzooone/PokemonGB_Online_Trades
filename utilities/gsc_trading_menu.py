@@ -9,6 +9,7 @@ class GSCTradingMenu:
     """
     default_server = ["pokemon-gb-online-trades.herokuapp.com", None]
     default_emulator = ["localhost", 8765]
+    default_max_level = 100
 
     def __init__(self, is_emulator=False):
         args = self.handle_args(is_emulator)
@@ -17,6 +18,8 @@ class GSCTradingMenu:
         self.server = [args.server_host, args.server_port]
         self.buffered = args.buffered
         self.japanese = args.japanese
+        self.max_level = args.max_level
+        self.egg = args.egg
         self.is_emulator = is_emulator
         if is_emulator:
             self.emulator = [args.emulator_host, args.emulator_port]
@@ -45,11 +48,13 @@ class GSCTradingMenu:
             "4": self.handle_sanity_option,
             "5": self.handle_verbose_option,
             "6": self.handle_buffered_option,
-            "7": self.handle_kill_on_byte_drop_option
+            "7": self.handle_kill_on_byte_drop_option,
+            "8": self.handle_max_level_option,
+            "9": self.handle_eggs_option
             }
         if is_emulator:
-            self.options_menu_handlers["8"] = self.handle_emulator_host_option
-            self.options_menu_handlers["9"] = self.handle_emulator_port_option
+            self.options_menu_handlers["10"] = self.handle_emulator_host_option
+            self.options_menu_handlers["11"] = self.handle_emulator_port_option
 
     def get_int(self, default_value):
         x = input()
@@ -154,6 +159,19 @@ class GSCTradingMenu:
         self.buffered = not self.buffered
         return False
     
+    def handle_max_level_option(self):
+        GSCTradingStrings.change_max_level_print(self.max_level)
+        self.max_level = self.get_int(self.max_level)
+        if self.max_level < 2:
+            self.max_level = 2
+        if self.max_level > 100:
+            self.max_level = 100
+        return False
+    
+    def handle_eggs_option(self):
+        self.egg = not self.egg
+        return False
+    
     def handle_japanese_option(self):
         self.japanese = not self.japanese
         return False
@@ -191,6 +209,11 @@ class GSCTradingMenu:
         parser.add_argument("-dkb", "--disable_kill_drops",
                             action="store_false", dest="kill_on_byte_drops", default=True,
                             help="don't kill the process for dropped bytes")
+        parser.add_argument("-mlp", "--max_level_pool", dest="max_level", default = self.default_max_level,
+                            help="Pool's max level", type=int)
+        parser.add_argument("-egp", "--eggify_pool",
+                            action="store_true", dest="egg", default=False,
+                            help="turns Pool Pokémon into ready-to-hatch eggs")
         parser.add_argument("-q", "--quiet",
                             action="store_false", dest="verbose", default=True,
                             help="don't print status messages to stdout")

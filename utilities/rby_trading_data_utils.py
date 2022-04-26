@@ -103,10 +103,12 @@ class RBYTradingPokémonInfo(GSCTradingPokémonInfo):
     moves_pos = 8
     pps_pos = 0x1D
     level_pos = 0x21
+    exp_pos = 0xE
     curr_hp_pos = 1
     stats_pos = 0x22
     evs_pos = 0x11
     ivs_pos = 0x1B
+    status_pos = 4
     
     no_moves_equality_ranges = [range(0,3), range(4,8), range(0xC,0x1D), range(0x21, pokemon_data_len)]
     all_lengths = [pokemon_data_len, ot_name_len, nickname_len, mail_len, sender_len]
@@ -122,6 +124,12 @@ class RBYTradingPokémonInfo(GSCTradingPokémonInfo):
 
     def add_nickname(self, data, start):
         self.nickname = RBYTradingText(data, start, length=self.nickname_len)
+    
+    def set_hatching_cycles(self, val=1):
+        pass
+    
+    def get_hatching_cycles(self):
+        return 0xFF
 
     def add_mail(self, data, start):
         pass

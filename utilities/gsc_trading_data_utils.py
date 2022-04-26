@@ -116,6 +116,8 @@ class GSCUtils:
     learnset_evos_path = "learnset_evos.bin"
     exp_groups_path = "pokemon_exp_groups.bin"
     exp_lists_path = "pokemon_exp.txt"
+    egg_nick_path = "egg_nick.bin"
+    
     everstone_id = 0x70
     egg_id = 0xFD
     end_of_line = 0x50
@@ -138,6 +140,7 @@ class GSCUtils:
     learnsets = None
     exp_groups = None
     exp_lists = None
+    egg_nick = None
     
     def __init__(self):
         curr_class = type(self)
@@ -150,6 +153,7 @@ class GSCUtils:
         curr_class.learnsets = GSCUtilsLoaders.prepare_learnsets(GSCUtilsMisc.read_data(self.get_path(curr_class.learnset_evos_path)))
         curr_class.exp_groups = GSCUtilsMisc.read_data(self.get_path(curr_class.exp_groups_path))
         curr_class.exp_lists = GSCUtilsLoaders.prepare_exp_lists(GSCUtilsLoaders.read_text_file(self.get_path(curr_class.exp_lists_path)))
+        curr_class.egg_nick = GSCUtilsMisc.read_data(self.get_path(curr_class.egg_nick_path))
     
     def get_path(self, target):
         return self.base_folder + target
@@ -401,10 +405,13 @@ class GSCTradingPokémonInfo:
     moves_pos = 2
     pps_pos = 0x17
     level_pos = 0x1F
+    exp_pos = 8
     curr_hp_pos = 0x22
     stats_pos = 0x24
     evs_pos = 0xB
     ivs_pos = 0x15
+    egg_cycles_pos = 0x1B
+    status_pos = 0x20
     
     no_moves_equality_ranges = [range(0,2), range(6,0x17), range(0x1B, pokemon_data_len)]
     all_lengths = [pokemon_data_len, ot_name_len, nickname_len, mail_len, sender_len]
@@ -437,6 +444,12 @@ class GSCTradingPokémonInfo:
     
     def is_nicknamed(self):
         return not self.nickname.values_equal(self.utils_class.pokemon_names[self.get_species()])
+    
+    def set_default_nickname(self):
+        self.add_nickname(self.utils_class.pokemon_names[self.get_species()], 0)
+    
+    def set_egg_nickname(self):
+        self.add_nickname(self.utils_class.egg_nick, 0)
     
     def get_species(self):
         return self.values[self.species_pos]
@@ -485,6 +498,12 @@ class GSCTradingPokémonInfo:
         if max_pp:
             self.set_pp(pos, self.utils_class.moves_pp_list[val])
     
+    def set_hatching_cycles(self, val=1):
+        self.values[self.egg_cycles_pos] = val
+    
+    def get_hatching_cycles(self):
+        return self.values[self.egg_cycles_pos]
+    
     def set_pp(self, pos, val):
         self.values[self.pps_pos + pos] = val
     
@@ -494,9 +513,19 @@ class GSCTradingPokémonInfo:
     def get_level(self):
         return self.values[self.level_pos]
     
+    def set_level(self, val):
+        self.values[self.level_pos] = val
+        self.set_exp(self.utils_class.get_exp_level(self.get_species(), val, self.utils_class))
+        self.update_stats()
+    
+    def set_exp(self, val):
+        self.values[self.exp_pos] = (val >> 0x10) & 0xFF
+        self.values[self.exp_pos+1] = (val >> 8) & 0xFF
+        self.values[self.exp_pos+2] = (val) & 0xFF
+    
     def update_stats(self):
         """
-        Updates the stats after they're changed (from evolving).
+        Updates the stats after they're changed (from evolving/changing level).
         """
         old_max_hps = self.get_max_hp()
         old_current_hps = self.get_curr_hp()
@@ -504,7 +533,7 @@ class GSCTradingPokémonInfo:
             GSCUtilsMisc.write_short(self.values, self.stats_pos + (i * 2), self.utils_class.stat_calculation(i, self.get_species(), self.get_ivs(), self.get_stat_exp(), self.get_level(), self.utils_class))
         new_max_hps = self.get_max_hp()
         old_current_hps += new_max_hps-old_max_hps
-        GSCUtilsMisc.write_short(self.values, self.curr_hp_pos, min(old_current_hps, new_max_hps))
+        GSCUtilsMisc.write_short(self.values, self.curr_hp_pos, min(max(0, old_current_hps), new_max_hps))
         
     def get_stat_exp(self):
         ret = [0,0,0,0,0]
@@ -524,6 +553,11 @@ class GSCTradingPokémonInfo:
 
     def heal(self):
         GSCUtilsMisc.write_short(self.values, self.curr_hp_pos, self.get_max_hp())
+        self.status_pos = 0
+
+    def faint(self):
+        GSCUtilsMisc.write_short(self.values, self.curr_hp_pos, 0)
+        self.status_pos = 0
     
     def get_max_hp(self):
         return GSCUtilsMisc.read_short(self.values, self.stats_pos)

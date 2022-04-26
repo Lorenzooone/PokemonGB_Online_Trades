@@ -10,6 +10,9 @@ class GSCTradingStrings:
     get_request = "G"
     set_japanese_str = "Set game as Japanese (Current: International)"
     unset_japanese_str = "Set game as International (Current: Japanese)"
+    set_egg_str = "Convert received Pokémon to eggs (Current: Do nothing)"
+    unset_egg_str = "Don't convert received Pokémon to eggs (Current: Turn to Eggs)"
+    unset_japanese_str = "Set game as International (Current: Japanese)"
     active_sanity_checks_str = "Disable Sanity checks (Current: Enabled)"
     inactive_sanity_checks_str = "Enable Sanity checks (Current: Disabled)"
     active_kill_on_byte_drops_str = "Disable Crash on synchronous byte drop (Current: Enabled)"
@@ -77,6 +80,7 @@ class GSCTradingStrings:
     server_str = "Server: "
     port_str = "Port: "
     room_str = "Room (Default = {room}): "
+    max_level_str = "New Max Level (Current = {max_level}): "
     emulator_host_str = "Emulator's host: "
     emulator_port_str = "Emulator's port: "
     game_selector_menu_str = ("\n=============== Game Selector ===============\n"
@@ -98,12 +102,16 @@ class GSCTradingStrings:
                         "5) Change Verbosity (Current: {verbose})\n"
                         "\n=============== 2-Player trade Options ===============\n"
                         "6) Change to {other_buffered} Trading (Current: {own_buffered})\n"
-                        "7) {kill_on_byte_drops_str}"
+                        "7) {kill_on_byte_drops_str}\n"
+                        "\n=============== Pools trade Options ===============\n"
+                        "8) Set Max Level (Current: {max_level})"
+                        "{gen_2_eggify_str}"
                         "{emulator_str}"
                         )
+    gen_2_eggify_str = ("\n9) {egg_str}")
     emulator_options_str = ("\n\n=============== Emulator Options ===============\n"
-                            "8) Host for emulator connection: {emulator_host}\n"
-                            "9) Port for emulator connection: {emulator_port}"
+                            "10) Host for emulator connection: {emulator_host}\n"
+                            "11) Port for emulator connection: {emulator_port}"
                             )
     
     def int_to_three_str(integer):
@@ -161,6 +169,14 @@ class GSCTradingStrings:
             return GSCTradingStrings.active_kill_on_byte_drops_str
         return GSCTradingStrings.inactive_kill_on_byte_drops_str
     
+    def get_eggify_str(options):
+        if not options.gen == 2:
+            return ""
+        egg_str = GSCTradingStrings.set_egg_str
+        if options.egg:
+            egg_str = GSCTradingStrings.unset_egg_str
+        return GSCTradingStrings.gen_2_eggify_str.format(egg_str=egg_str)
+    
     def get_emulator_str(options):
         if not options.is_emulator:
             return ""
@@ -174,7 +190,9 @@ class GSCTradingStrings:
                                                      other_buffered=GSCTradingStrings.get_buffered_str(not options.buffered),
                                                      own_buffered=GSCTradingStrings.get_buffered_str(options.buffered),
                                                      kill_on_byte_drops_str=GSCTradingStrings.get_kill_on_byte_drops_str(options.kill_on_byte_drops),
-                                                     emulator_str = GSCTradingStrings.get_emulator_str(options)
+                                                     emulator_str = GSCTradingStrings.get_emulator_str(options),
+                                                     max_level = options.max_level,
+                                                     gen_2_eggify_str = GSCTradingStrings.get_eggify_str(options)
                                                      )
              )
 
@@ -186,6 +204,9 @@ class GSCTradingStrings:
     
     def change_port_print():
         print(GSCTradingStrings.port_str, end='')
+    
+    def change_max_level_print(max_level):
+        print(GSCTradingStrings.max_level_str.format(max_level=max_level), end='')
     
     def change_room_print(room):
         print(GSCTradingStrings.room_str.format(room=room), end='')

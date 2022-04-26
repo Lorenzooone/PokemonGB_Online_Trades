@@ -286,9 +286,26 @@ class GSCTradingClient:
                 mon = self.party_reader(GSCUtilsMisc.read_data(self.fileBasePoolTargetName), do_full=False)
                 mon.pokemon += [received_mon[0]]
                 
+                # Handle max level option
+                if received_mon[0].get_level() > self.trader.max_level:
+                    received_mon[0].set_level(self.trader.max_level)
+                
                 # Specially handle the egg party IDs
                 if not received_mon[1]:
-                    mon.party_info.set_id(0, mon.pokemon[0].get_species())
+                    mon.party_info.set_id(0, received_mon[0].get_species())
+                    # Handle egg options
+                    if (self.trader.menu.egg) and (self.trader.menu.gen == 2):
+                        mon.party_info.set_id(0, self.utils_class.egg_id)
+                        received_mon[0].set_hatching_cycles()
+                        received_mon[0].faint()
+                        received_mon[0].set_egg_nickname()
+                elif (not self.trader.menu.egg) and (self.trader.menu.gen == 2) and (received_mon[0].get_hatching_cycles() <= 1):
+                    mon.party_info.set_id(0, received_mon[0].get_species())
+                    received_mon[0].heal()
+                    received_mon[0].set_default_nickname()
+            else:
+                mon = None
+                    
         return mon
         
     def get_trading_data(self):
@@ -1022,6 +1039,7 @@ class GSCTrading:
         self.other_blank_trade = True
         self.trade_type = GSCTradingStrings.pool_trade_str
         self.reset_trade()
+        self.max_level = self.menu.max_level
         self.exit_or_new = True
         # Start of what the player sees. Enters the room
         self.enter_room()
