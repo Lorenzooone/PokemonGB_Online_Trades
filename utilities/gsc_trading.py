@@ -365,9 +365,9 @@ class GSCTrading:
     sleep_timer = 0.01
     enter_room_states = [[0x01, 0xFE, 0x61, 0xD1, 0xFE], [{0xFE}, {0x61}, {0xD1}, {0xFE}, {0xFE}]]
     start_trading_states = [[0x75, 0x75, 0x76], [{0x75}, {0}, {0xFD}]]
-    success_values = {0x70, 0x71, 0x72, 0x73, 0x74, 0x75, 0x7F}
-    possible_indexes = {0x70, 0x71, 0x72, 0x73, 0x74, 0x75, 0x7F}
-    fillers = {}
+    success_values = set(range(0x70, 0x80))
+    possible_indexes = set(range(0x70, 0x80))
+    fillers = [{}, {}, {}]
     filler_value = 0xFE00
     last_filler_value = 0xFEFF
     max_consecutive_no_data = 0x100
@@ -507,17 +507,18 @@ class GSCTrading:
                 if send_data is not None:
                     next = self.checks.checks_map[index][i](send_data[i])
                     send_data[i] = next
-                if ((i+1) not in self.fillers.keys()) or (index != self.fillers[i+1][2]):
+                next_i = i+1
+                if next_i not in self.fillers[index].keys():
                     next = self.swap_byte(next)
-                    self.verbose_print(GSCTradingStrings.transfer_to_hardware_str.format(index=index+1, completion=GSCTradingStrings.x_out_of_y_str(i+1, length)), end='')
+                    self.verbose_print(GSCTradingStrings.transfer_to_hardware_str.format(index=index+1, completion=GSCTradingStrings.x_out_of_y_str(next_i, length)), end='')
                     buf += [next]
                 # Handle fillers
                 else:
-                    filler_len = self.fillers[i+1][0]
-                    filler_val = self.fillers[i+1][1]
+                    filler_len = self.fillers[index][next_i][0]
+                    filler_val = self.fillers[index][next_i][1]
                     if send_data is not None:
                         for j in range(filler_len):
-                            send_data[i + 1 + j] = self.checks.checks_map[index][i + 1 + j](send_data[i + 1 + j])
+                            send_data[next_i + j] = self.checks.checks_map[index][next_i + j](send_data[next_i + j])
                     buf += ([filler_val] * filler_len)
                     i += (filler_len - 1)
                 i += 1
@@ -556,9 +557,9 @@ class GSCTrading:
                             cleaned_byte = self.checks.checks_map[index][i](recv_data[i])
                             next_i = i+1
                             # Handle fillers
-                            if next_i in self.fillers.keys() and index == self.fillers[next_i][2]:
-                                filler_len = self.fillers[next_i][0]
-                                filler_val = self.fillers[next_i][1]
+                            if next_i in self.fillers[index].keys():
+                                filler_len = self.fillers[index][next_i][0]
+                                filler_val = self.fillers[index][next_i][1]
                                 send_buf[(next_i)&1][0] = self.filler_value + filler_len
                                 send_buf[(next_i)&1][1] = filler_val
                                 buf += ([filler_val] * filler_len)
@@ -567,12 +568,13 @@ class GSCTrading:
                                 i += (filler_len - 1)
                             else:
                                 next = self.swap_byte(cleaned_byte)
-                                self.verbose_print(GSCTradingStrings.transfer_to_hardware_str.format(index=index+1, completion=GSCTradingStrings.x_out_of_y_str(i+1, length)), end='')
+                                self.verbose_print(GSCTradingStrings.transfer_to_hardware_str.format(index=index+1, completion=GSCTradingStrings.x_out_of_y_str(next_i, length)), end='')
+                                # Fillers aren't needed anymore, but their last byte may be needed
+                                self.remove_filler(send_buf, i)
                                 # This will, in turn, get the next byte
                                 # the other client needs
                                 send_buf[(next_i)&1][0] = next_i
                                 send_buf[(next_i)&1][1] = next
-                                self.remove_filler(send_buf, next_i)
                                 other_buf += [cleaned_byte]
                                 # Check for "bad transfer" clues
                                 self.check_bad_data(cleaned_byte, i, index)
@@ -605,29 +607,32 @@ class GSCTrading:
         Tries to read a single synchronous entry.
         """
         if recv_buf[scanning_index] is not None:
-            byte_num = recv_buf[scanning_index][0]
-            if byte_num <= length:
-                if (byte_num == 0) and (recv_buf[2][0] == index + 1):
-                    ret[length] = recv_buf[scanning_index][1]
-                else:
+            if recv_buf[2][0] == (index + 1):
+                ret[length] = recv_buf[scanning_index][1]
+            else:
+                byte_num = recv_buf[scanning_index][0]
+                if byte_num <= length:
                     ret[byte_num] = recv_buf[scanning_index][1]
-            elif byte_num > self.filler_value and byte_num <= self.last_filler_value:
-                # Try to handle fillers by rapidly swapping their bytes
-                previous_scanning_index = (scanning_index+1) & 1
-                total_bytes = byte_num - self.filler_value
-                byte_num = recv_buf[previous_scanning_index][0]
-                for j in range(total_bytes):
-                    ret[byte_num + 1 + j] = recv_buf[scanning_index][1]
+                elif byte_num > self.filler_value and byte_num <= self.last_filler_value:
+                    # Try to handle fillers by rapidly swapping their bytes
+                    previous_scanning_index = (scanning_index+1) & 1
+                    total_bytes = byte_num - self.filler_value
+                    byte_num = recv_buf[previous_scanning_index][0]
+                    for j in range(total_bytes):
+                        ret[byte_num + 1 + j] = recv_buf[scanning_index][1]
         
-    def remove_filler(self, send_buf, i):
+    def remove_filler(self, send_buf, curr_byte_num):
         """
         Removes the filler from the send buffer when a new byte is read.
         Also prevents desyncs.
         """
-        curr_byte_num = send_buf[i&1][0]
-        byte_num = send_buf[(i+1)&1][0]
-        if byte_num > self.filler_value and byte_num <= self.last_filler_value:
-            send_buf[(i+1)&1][0] = curr_byte_num-1
+        for i in range(2):
+            byte_num = send_buf[i][0]
+            byte_val = send_buf[i][1]
+            if byte_num > self.filler_value and byte_num <= self.last_filler_value:
+                for j in range(2):
+                    send_buf[j][0] = curr_byte_num
+                    send_buf[j][1] = byte_val
     
     def get_swappable_bytes(self, recv_buf, length, index):
         """
