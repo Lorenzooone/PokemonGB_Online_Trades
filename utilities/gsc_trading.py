@@ -608,7 +608,7 @@ class GSCTrading:
         """
         if recv_buf[scanning_index] is not None:
             if recv_buf[2][0] == (index + 1):
-                ret[length] = recv_buf[scanning_index][1]
+                ret[length] = 0
             else:
                 byte_num = recv_buf[scanning_index][0]
                 if byte_num <= length:
