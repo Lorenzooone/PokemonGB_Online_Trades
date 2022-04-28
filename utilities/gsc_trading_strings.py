@@ -55,6 +55,7 @@ class GSCTradingStrings:
     arrived_synchro_str = "\nThe other player arrived. Starting party information trading..."
     transfer_to_hardware_str = "\rSection {index}: {completion}"
     restart_trade_str = "\nStarting a new trade."
+    incompatible_trade_str = "\nIt looks like the requested trade is not possible.\nYou can't do a synchronous trade when both the International version and the Japanese version\nrequire Mail data from the other.\nEither do a Buffered trade, or remove mail from one of the two.\nShutting down..."
     separate_section_str = "\n"
     buffered_negotiation_str = '\nThe other player wants to do a {other_buffered} trade.\nWould you like to switch to a {other_buffered} trade?'
     buffered_other_negotiation_str = "\nAsking the other player whether they're willing to do a {own_buffered} trade..."

@@ -91,6 +91,12 @@ class GSCUtilsLoaders:
             ret[i] = data[(i)*num_stats:(i+1)*num_stats]
         return ret
 
+    def prepare_functions_map(data, functions):
+        call_map = [None] * len(data)
+        for i in range(len(data)):
+            call_map[i] = functions[data[i]]
+        return call_map
+
     def load_trading_data(target, lengths):
         data = None
         try:
@@ -231,10 +237,25 @@ class GSCUtils:
         ret = None
         
         # Prepare sanity checks stuff
+        checks.reset_species_item_list()
+        checks.set_single_team_size()
         checks.prepare_text_buffer()
+        checks.prepare_species_buffer()
         checker = checks.single_pokemon_checks_map
         
         if len(data) > len(checker):
+            # Handle getting/sending eggs. That requires one extra byte
+            is_egg = False
+            if data[len(checker)] == GSCUtils.egg_value:
+                is_egg = True
+            
+            # Prepare for further checks
+            if is_egg:
+                checks.species_cleaner(GSCUtils.egg_id)
+            else:
+                checks.species_cleaner(data[0])
+            checks.prepare_species_buffer()
+                
             # Applies the checks to the received data.
             # If the sanity checks are off, this will be a simple copy
             purified_data = checks.apply_checks_to_data(checker, data)
@@ -243,11 +264,6 @@ class GSCUtils:
             # the raw one
             raw = GSCTradingPokémonInfo.set_data(data)
             mon = GSCTradingPokémonInfo.set_data(purified_data)
-            
-            # Handle getting/sending eggs. That requires one extra byte
-            is_egg = False
-            if purified_data[len(checker)] == GSCUtils.egg_value:
-                is_egg = True
             
             # If the sanity checks are on, has the pokémon changed
             # too much from the cleaning?
@@ -440,7 +456,7 @@ class GSCTradingPokémonInfo:
         self.mail = self.text_class(data, start, length=self.mail_len)
         
     def add_mail_sender(self, data, start):
-        self.mail_sender = self.text_class(data, start, length=self.sender_len, data_start=3)
+        self.mail_sender = self.text_class(data, start, length=self.sender_len, data_start=0)
     
     def is_nicknamed(self):
         return not self.nickname.values_equal(self.utils_class.pokemon_names[self.get_species()])
@@ -804,14 +820,24 @@ class GSCTradingData:
         """
         Trades a pokémon between two parties.
         """
+        # Prepare checks
+        checks.reset_species_item_list()
+        checks.set_single_team_size()
+        checks.prepare_text_buffer()
+        checks.prepare_species_buffer()
+        
+        # Apply checks
+        own_id = checks.species_cleaner(self.party_info.get_id(own_index))
+        checks.prepare_species_buffer()
+        own = self.mon_generator_class().set_data(checks.apply_checks_to_data(checks.single_pokemon_checks_map, self.pokemon[own_index].get_data()))
+        
+        # Actually trade the Pokémon
         self.reorder_party(own_index)
         other.reorder_party(other_index)
-        own = self.mon_generator_class().set_data(checks.apply_checks_to_data(checks.single_pokemon_checks_map, self.pokemon[self.get_last_mon_index()].get_data()))
         self.pokemon[self.get_last_mon_index()] = other.pokemon[other.get_last_mon_index()]
         other.pokemon[other.get_last_mon_index()] = own
         checks.curr_species_pos = self.get_last_mon_index()
         checks.team_size = self.get_party_size()
-        own_id = checks.species_cleaner(self.party_info.get_id(self.get_last_mon_index()))
         self.party_info.set_id(self.get_last_mon_index(), other.party_info.get_id(other.get_last_mon_index()))
         other.party_info.set_id(other.get_last_mon_index(), own_id)
     
@@ -867,10 +893,12 @@ class GSCChecks:
     moves_checks_map_path = "moves_checks_map.bin"
     curr_exp_pos_masks = [0, 0xFF0000, 0xFFFF00]
     free_value_species = 0xFF
+    empty_value_species = 0
     free_value_moves = 0
     tackle_id = 0x21
     rattata_id = 0x13
     question_mark = 0xE6
+    newline = 0x4E
     
     def __init__(self, section_sizes, do_sanity_checks):
         self.utils_class = self.get_utils_class()
@@ -896,11 +924,17 @@ class GSCChecks:
             self.clean_pp,
             self.clean_experience,
             self.clean_egg_cycles_friendship,
-            self.clean_type
+            self.clean_type,
+            self.clean_text_newline,
+            self.clean_text_final_no_end,
+            self.clean_species_force_terminate,
+            self.clean_mail_species,
+            self.clean_mail_item,
+            self.clean_mail_same_species
             ]
-        self.checks_map = self.prepare_checks_map(GSCUtilsMisc.read_data(self.get_path(self.checks_map_path)), section_sizes)
-        self.single_pokemon_checks_map = self.prepare_basic_checks_map(GSCUtilsMisc.read_data(self.get_path(self.single_pokemon_checks_map_path)))
-        self.moves_checks_map = self.prepare_basic_checks_map(GSCUtilsMisc.read_data(self.get_path(self.moves_checks_map_path)))
+        self.checks_map = self.prepare_checks_map(GSCUtilsMisc.read_data(self.get_path(self.checks_map_path)), section_sizes, self.check_functions)
+        self.single_pokemon_checks_map = GSCUtilsLoaders.prepare_functions_map(GSCUtilsMisc.read_data(self.get_path(self.single_pokemon_checks_map_path)), self.check_functions)
+        self.moves_checks_map = GSCUtilsLoaders.prepare_functions_map(GSCUtilsMisc.read_data(self.get_path(self.moves_checks_map_path)), self.check_functions)
         self.species_cleaner = self.clean_species_sp
     
     def get_path(self, target):
@@ -937,20 +971,27 @@ class GSCChecks:
     def prepare_text_buffer(self):
         self.curr_text = []
         
+    def reset_species_item_list(self):
+        self.species_list = []
+        self.species_list_size = 0
+        self.item_list = []
+        
+    def set_single_team_size(self):
+        self.team_size = 1
+        
+    def add_to_species_list(self, species):
+        if (species != self.free_value_species) and (species != self.empty_value_species):
+            self.species_list_size += 1
+        self.species_list += [species]
+        
     def prepare_species_buffer(self):
         self.curr_species_pos = 0
 
-    def prepare_checks_map(self, data, lengths):
+    def prepare_checks_map(self, data, lengths, functions_list):
         raw_data_sections = GSCUtilsMisc.divide_data(data, lengths)
         call_map = [[],[],[]]
         for i in range(len(raw_data_sections)):
-            call_map[i] = self.prepare_basic_checks_map(raw_data_sections[i])
-        return call_map
-
-    def prepare_basic_checks_map(self, data):
-        call_map = [None] * len(data)
-        for i in range(len(data)):
-            call_map[i] = self.check_functions[data[i]]
+            call_map[i] = GSCUtilsLoaders.prepare_functions_map(raw_data_sections[i], functions_list)
         return call_map
     
     @clean_check_sanity_checks
@@ -987,7 +1028,9 @@ class GSCChecks:
     
     @clean_check_sanity_checks
     def clean_item(self, item):
-        return self.clean_value(item, self.is_item_valid, 0)
+        cleaned_item = self.clean_value(item, self.is_item_valid, 0)
+        self.item_list += [cleaned_item]
+        return cleaned_item
     
     @clean_check_sanity_checks
     def clean_pp(self, pp):
@@ -1017,6 +1060,7 @@ class GSCChecks:
     @clean_check_sanity_checks
     def clean_species(self, species):
         self.curr_species = self.clean_value(species, self.is_species_valid, self.rattata_id)
+        self.curr_species_pos += 1
         self.curr_stat_id = 0
         self.iv = [0,0,0,0]
         self.stat_exp = [0,0,0,0,0]
@@ -1035,14 +1079,21 @@ class GSCChecks:
     
     @clean_check_sanity_checks
     def clean_species_sp(self, species):
-        if species == self.free_value_species or self.curr_species_pos >= self.team_size:
+        if species == self.free_value_species or self.species_list_size >= self.team_size:
+            self.add_to_species_list(self.free_value_species)
             self.curr_species_pos += 1
             return self.free_value_species
         found_species = self.clean_value(species, self.is_species_valid, self.rattata_id)
         if species == self.utils_class.egg_id:
             found_species = species
+        self.add_to_species_list(found_species)
         self.curr_species_pos += 1
         return found_species
+    
+    @clean_check_sanity_checks
+    def clean_species_force_terminate(self, species):
+        self.prepare_species_buffer()
+        return self.free_value_species
     
     @clean_check_sanity_checks
     def load_stat_exp(self, val):
@@ -1065,6 +1116,19 @@ class GSCChecks:
         return val
     
     @clean_check_sanity_checks
+    def clean_mail_species(self, species):
+        self.curr_species_pos += 1
+        return self.species_list[self.curr_species_pos-1]
+    
+    @clean_check_sanity_checks
+    def clean_mail_same_species(self, species):
+        return self.species_list[self.curr_species_pos-1]
+    
+    @clean_check_sanity_checks
+    def clean_mail_item(self, item):
+        return self.item_list[self.curr_species_pos-1]
+    
+    @clean_check_sanity_checks
     def clean_text(self, char):
         char_val = self.clean_value(char, self.is_char_valid, self.question_mark)
         self.curr_text += [char_val]
@@ -1074,6 +1138,21 @@ class GSCChecks:
     @clean_check_sanity_checks
     def clean_text_final(self, char):
         char_val = self.utils_class.end_of_line
+        self.curr_text += [char_val]
+        # Possibility to put bad words filters here
+        self.prepare_text_buffer()
+        return char_val
+    
+    @clean_check_sanity_checks
+    def clean_text_newline(self, char):
+        char_val = self.newline
+        self.curr_text += [char_val]
+        # Possibility to put bad words filters here
+        return char_val
+    
+    @clean_check_sanity_checks
+    def clean_text_final_no_end(self, char):
+        char_val = self.clean_value(char, self.is_char_valid, self.question_mark)
         self.curr_text += [char_val]
         # Possibility to put bad words filters here
         self.prepare_text_buffer()
@@ -1091,13 +1170,16 @@ class GSCChecks:
         return curr_stat
     
     @clean_check_sanity_checks
-    def check_stat(self, val, zero_min=False):
+    def check_stat(self, val, zero_min=False, zero_max=False):
         if self.curr_pos == 0:
             self.stat = 0
             min_stat = self.utils_class.stat_calculation(self.curr_stat_id, self.curr_species, self.iv, self.stat_exp, self.level, self.utils_class, do_exp=False)
-            if zero_min:
+            max_stat = self.utils_class.stat_calculation(self.curr_stat_id, self.curr_species, self.iv, self.stat_exp, self.level, self.utils_class)
+            if zero_min or zero_max:
                 min_stat = 0
-            self.stat_range = [min_stat, self.utils_class.stat_calculation(self.curr_stat_id, self.curr_species, self.iv, self.stat_exp, self.level, self.utils_class)]
+            if zero_max:
+                max_stat = 0
+            self.stat_range = [min_stat, max_stat]
         curr_read_val = val << (8 * (1 - (self.curr_pos & 1)))
         self.stat = self.check_range(self.stat_range, (self.stat & 0xFF00) | curr_read_val)
         val = (self.stat >> (8 * (1 - (self.curr_pos & 1)))) & 0xFF
@@ -1107,12 +1189,19 @@ class GSCChecks:
             self.curr_pos = 0
         return val
     
+    def is_egg(self):
+        if self.species_list[self.curr_species_pos-1] == self.utils_class.egg_id:
+            return True
+        return False
+    
     @clean_check_sanity_checks
     def check_hp(self, val):
         start_zero = False
+        max_zero = False
         if self.curr_hp == 0:
             start_zero = True
-        val = self.check_stat(val, zero_min=start_zero)
+            max_zero = self.is_egg()
+        val = self.check_stat(val, zero_min=start_zero, zero_max=max_zero)
         if self.curr_pos == 0:
             if self.curr_hp == 0:
                 self.hps = [0,0]

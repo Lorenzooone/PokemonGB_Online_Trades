@@ -56,12 +56,17 @@ class RBYUtils(GSCUtils):
         ret = None
         
         # Prepare sanity checks stuff
+        checks.reset_species_item_list()
+        checks.set_single_team_size()
         checks.prepare_text_buffer()
+        checks.prepare_species_buffer()
         checker = checks.single_pokemon_checks_map
         
         if len(data) >= len(checker):
             # Applies the checks to the received data.
             # If the sanity checks are off, this will be a simple copy
+            checks.species_cleaner(data[0])
+            checks.prepare_species_buffer()
             purified_data = checks.apply_checks_to_data(checker, data)
                 
             # Prepares the pokémon data. For both the cleaned one and
@@ -250,12 +255,17 @@ class RBYChecks(GSCChecks):
         self.level = self.utils_class.max_level
         return val
     
+    def is_egg(self):
+        return False
+    
     @GSCChecks.clean_check_sanity_checks
     def clean_species_sp(self, species):
-        if species == self.free_value_species or self.curr_species_pos >= self.team_size:
+        if species == self.free_value_species or self.species_list_size >= self.team_size:
+            self.add_to_species_list(self.free_value_species)
             self.curr_species_pos += 1
             return self.free_value_species
         found_species = self.clean_value(species, self.is_species_valid, self.rattata_id)
+        self.add_to_species_list(found_species)
         self.curr_species_pos += 1
         return found_species
     

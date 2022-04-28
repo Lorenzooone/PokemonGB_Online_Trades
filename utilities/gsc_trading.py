@@ -98,6 +98,7 @@ class GSCTradingClient:
         if val is not None:
             updating_mon = self.trader.other_pokemon.pokemon[self.trader.other_pokemon.get_last_mon_index()]
             data = [updating_mon.get_species()] + val
+            self.trader.checks.prepare_species_buffer()
             data = self.trader.checks.apply_checks_to_data(self.trader.checks.moves_checks_map, data)
             for i in range(4):
                 updating_mon.set_move(i, data[i+1], max_pp=False)
@@ -437,7 +438,7 @@ class GSCTrading:
         Checks if the transfer dropped any bytes.
         """
         if byte_index >= self.drop_bytes_checks[0][section_index]:
-            if byte_index < self.special_sections_len[section_index]:
+            if byte_index < self.get_section_length(section_index):
                 if byte == self.drop_bytes_checks[1][section_index]:
                     return True
             else:
@@ -461,13 +462,32 @@ class GSCTrading:
             elif not self.printed_warning_drop:
                 self.verbose_print(GSCTradingStrings.warning_byte_dropped_str)
                 self.printed_warning_drop = True
+    
+    def get_mail_section_id(self):
+        return 2
+    
+    def get_printable_index(self, index):
+        return index+1
+    
+    def get_section_length(self, index):
+        return self.special_sections_len[index]
+    
+    def get_checker(self, index):
+        return self.checks.checks_map[index]
+    
+    def convert_mail_data(self, data, to_device):
+        """
+        Handles converting the mail data.
+        """
+        return data
                     
     def read_section(self, index, send_data, buffered):
         """
         Reads a data section and sends it to the device.
         """
-        length = self.special_sections_len[index]
+        length = self.get_section_length(index)
         next = self.next_section
+        checker = self.get_checker(index)
         
         # Prepare sanity checks stuff
         self.checks.prepare_text_buffer()
@@ -486,6 +506,9 @@ class GSCTrading:
                     recv_buf = self.read_entire_data(received)
                     if recv_buf[1] is not None and recv_buf[1][0] == 0xFFFF and recv_buf[2][0] == index: 
                         found = True
+                    elif recv_buf[1] is not None and recv_buf[1][0] == 0xFFFF:
+                        self.verbose_print(GSCTradingStrings.incompatible_trade_str)
+                        self.kill_function()
                 if not found:
                     self.sleep_func()
                     self.swap_byte(self.no_input)
@@ -505,12 +528,12 @@ class GSCTrading:
             i = 0
             while i < (length-1):
                 if send_data is not None:
-                    next = self.checks.checks_map[index][i](send_data[i])
+                    next = checker[i](send_data[i])
                     send_data[i] = next
                 next_i = i+1
                 if next_i not in self.fillers[index].keys():
                     next = self.swap_byte(next)
-                    self.verbose_print(GSCTradingStrings.transfer_to_hardware_str.format(index=index+1, completion=GSCTradingStrings.x_out_of_y_str(next_i, length)), end='')
+                    self.verbose_print(GSCTradingStrings.transfer_to_hardware_str.format(index=self.get_printable_index(index), completion=GSCTradingStrings.x_out_of_y_str(next_i, length)), end='')
                     buf += [next]
                 # Handle fillers
                 else:
@@ -518,17 +541,17 @@ class GSCTrading:
                     filler_val = self.fillers[index][next_i][1]
                     if send_data is not None:
                         for j in range(filler_len):
-                            send_data[next_i + j] = self.checks.checks_map[index][next_i + j](send_data[next_i + j])
+                            send_data[next_i + j] = checker[next_i + j](send_data[next_i + j])
                     buf += ([filler_val] * filler_len)
                     i += (filler_len - 1)
                 i += 1
             
             if send_data is not None:
                 # Send the last byte too
-                next = self.checks.checks_map[index][length-1](send_data[length-1])
+                next = checker[length-1](send_data[length-1])
                 send_data[length-1] = next
             self.swap_byte(next)
-            self.verbose_print(GSCTradingStrings.transfer_to_hardware_str.format(index=index+1, completion=GSCTradingStrings.x_out_of_y_str(length, length)), end='')
+            self.verbose_print(GSCTradingStrings.transfer_to_hardware_str.format(index=self.get_printable_index(index), completion=GSCTradingStrings.x_out_of_y_str(length, length)), end='')
             for j in range(self.drop_bytes_checks[2][index]):
                 self.swap_byte(self.no_data)
             other_buf = send_data
@@ -554,7 +577,7 @@ class GSCTrading:
                             recv_data = self.get_swappable_bytes(recv_buf, length, index)
                         if i in recv_data.keys() and (i < length):
                             # Clean it and send it
-                            cleaned_byte = self.checks.checks_map[index][i](recv_data[i])
+                            cleaned_byte = checker[i](recv_data[i])
                             next_i = i+1
                             # Handle fillers
                             if next_i in self.fillers[index].keys():
@@ -564,11 +587,11 @@ class GSCTrading:
                                 send_buf[(next_i)&1][1] = filler_val
                                 buf += ([filler_val] * filler_len)
                                 for j in range(filler_len):
-                                    other_buf += [self.checks.checks_map[index][next_i + j](filler_val)]
+                                    other_buf += [checker[next_i + j](filler_val)]
                                 i += (filler_len - 1)
                             else:
                                 next = self.swap_byte(cleaned_byte)
-                                self.verbose_print(GSCTradingStrings.transfer_to_hardware_str.format(index=index+1, completion=GSCTradingStrings.x_out_of_y_str(next_i, length)), end='')
+                                self.verbose_print(GSCTradingStrings.transfer_to_hardware_str.format(index=self.get_printable_index(index), completion=GSCTradingStrings.x_out_of_y_str(next_i, length)), end='')
                                 # Fillers aren't needed anymore, but their last byte may be needed
                                 self.remove_filler(send_buf, i)
                                 # This will, in turn, get the next byte
@@ -607,7 +630,7 @@ class GSCTrading:
         Tries to read a single synchronous entry.
         """
         if recv_buf[scanning_index] is not None:
-            if recv_buf[2][0] == (index + 1):
+            if recv_buf[2][0] >= (index + 1):
                 ret[length] = 0
             else:
                 byte_num = recv_buf[scanning_index][0]
@@ -913,6 +936,8 @@ class GSCTrading:
         if necessary and in the way which requires less packet transfers.
         Returns the player's data and the other player's data.
         """
+        # Prepare checks
+        self.checks.reset_species_item_list()
         # Send and get the first two sections
         random_data, random_data_other = self.read_section(0, send_data[0], buffered)
         pokemon_data, pokemon_data_other = self.read_section(1, send_data[1], buffered)
@@ -924,7 +949,9 @@ class GSCTrading:
         
         # Trade mail data only if needed
         if (pokemon_own_mail and pokemon_other_mail) or buffered:
-            mail_data, mail_data_other = self.read_section(2, send_data[2], buffered)
+            send_data[2] = self.convert_mail_data(send_data[2], True)
+            mail_data, mail_data_other = self.read_section(self.get_mail_section_id(), send_data[2], buffered)
+            mail_data = self.convert_mail_data(mail_data, False)
         else:
             send_data[2] = self.utils_class.no_mail_section
             # Get mail data if only the other client has it
@@ -935,7 +962,9 @@ class GSCTrading:
                 self.verbose_print(GSCTradingStrings.no_mail_other_data_str)
                 
             # Exchange mail data with the device
-            mail_data, mail_data_other = self.read_section(2, send_data[2], True)
+            send_data[2] = self.convert_mail_data(send_data[2], True)
+            mail_data, mail_data_other = self.read_section(self.get_mail_section_id(), send_data[2], True)
+            mail_data = self.convert_mail_data(mail_data, False)
             
             # Send mail data if only this client has it
             if pokemon_own_mail:
