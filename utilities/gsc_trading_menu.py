@@ -11,8 +11,11 @@ class GSCTradingMenu:
     default_emulator = ["localhost", 8765]
     default_max_level = 100
 
-    def __init__(self, is_emulator=False):
-        args = self.handle_args(is_emulator)
+    def __init__(self, kill_function, is_emulator=False):
+        try:
+            args = self.handle_args(is_emulator)
+        except SystemExit as e:
+            kill_function()
         
         # Initialize the menu
         self.server = [args.server_host, args.server_port]

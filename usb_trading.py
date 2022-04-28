@@ -16,7 +16,7 @@ from utilities.gsc_trading_strings import GSCTradingStrings
 dev = None
 
 def transfer_func(sender, receiver):
-    menu = GSCTradingMenu()
+    menu = GSCTradingMenu(kill_function)
     menu.handle_menu()
     
     if menu.verbose:

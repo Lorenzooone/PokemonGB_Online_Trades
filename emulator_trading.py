@@ -75,7 +75,7 @@ def transfer_func(p, menu):
     elif menu.trade_type == GSCTradingStrings.pool_trade_str:
         trade_c.pool_trade()
 
-menu = GSCTradingMenu(is_emulator=True)
+menu = GSCTradingMenu(kill_function, is_emulator=True)
 menu.handle_menu()
 p = PokeTrader(menu)
 p.run()
