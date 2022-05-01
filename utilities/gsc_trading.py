@@ -364,6 +364,7 @@ class GSCTrading:
     Class which handles the trading process for the player.
     """
     sleep_timer = 0.01
+    option_confirmation_threshold = 10
     enter_room_states = [[0x01, 0xFE, 0x61, 0xD1, 0xFE], [{0xFE}, {0x61}, {0xD1}, {0xFE}, {0xFE}]]
     start_trading_states = [[0x75, 0x75, 0x76], [{0x75}, {0}, {0xFD}]]
     success_values = set(range(0x70, 0x80))
@@ -691,30 +692,43 @@ class GSCTrading:
             next = self.swap_byte(self.stop_trade)
             if(target == self.stop_trade and next == target):
                 target = 0
+                
+    def wait_for_set_of_values(self, next, values):
+        """
+        Waits for the user choosing an option and confirms it's not some
+        garbage being sent.
+        """
+        found_val = next
+        consecutive_reads = 0
+        while consecutive_reads < self.option_confirmation_threshold:
+            next = self.swap_byte(self.no_input)
+            if next in values:
+                if next == found_val:
+                    consecutive_reads += 1
+                else:
+                    consecutive_reads = 0
+            else:
+                consecutive_reads = 0
+            found_val = next
+        return next
 
     def wait_for_choice(self, next):
         """
         Waits for an useful value.
         """
-        while(next not in self.possible_indexes):
-            next = self.swap_byte(self.no_input)
-        return next
+        return self.wait_for_set_of_values(next, self.possible_indexes)
 
     def wait_for_accept_decline(self, next):
         """
         Waits for an useful value.
         """
-        while((next != self.accept_trade) and (next != self.decline_trade)):
-            next = self.swap_byte(self.no_input)
-        return next
+        return self.wait_for_set_of_values(next, set([self.accept_trade, self.decline_trade]))
 
     def wait_for_success(self, next):
         """
         Waits for success.
         """
-        while(next not in self.success_values):
-            next = self.swap_byte(self.no_input)
-        return next
+        return self.wait_for_set_of_values(next, self.success_values)
 
     def wait_for_no_data(self, next, resent_byte):
         """
@@ -891,6 +905,8 @@ class GSCTrading:
 
                     trade_completed = True
                     next = self.swap_byte(next)
+                    next = self.wait_for_no_data(next, received_choice)
+                    next = self.wait_for_no_input(next)
                     self.verbose_print(GSCTradingStrings.restart_trade_str)
                     self.exit_or_new = False
                     

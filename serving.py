@@ -5,6 +5,7 @@ import websockets
 import threading
 import signal
 import os
+import boto3
 from random import Random
 from time import sleep
 from utilities.high_level_listener import HighLevelListener
@@ -13,6 +14,8 @@ from utilities.rby_trading import RBYTradingClient
 from utilities.gsc_trading_strings import GSCTradingStrings
 from utilities.gsc_trading_data_utils import *
 from utilities.rby_trading_data_utils import *
+
+s3 = boto3.client("s3")
 
 total_rooms = 100000
 link_rooms = [[set()]*total_rooms,[set()]*total_rooms]
@@ -34,12 +37,15 @@ class ServerUtils:
             elif gen == 0:
                 data += RBYUtils.single_mon_to_data(m[0], m[1])
         GSCUtilsMisc.write_data(ServerUtils.saved_mons_path + str(gen + 1) + ServerUtils.bin_eop, data)
+        s3.upload_file(Bucket="pokemon-gb-online-pool-gen1", Key=ServerUtils.saved_mons_path + str(gen + 1) + ServerUtils.bin_eop, Filename="./" + ServerUtils.saved_mons_path + str(gen + 1) + ServerUtils.bin_eop)
     
     def load_mons(checks, gen):
         """
         Loads the Pool's Pokémon from file.
         """
         preparing_mons = []
+        
+        s3.download_file(Bucket="pokemon-gb-online-pool-gen1", Key=ServerUtils.saved_mons_path + str(gen + 1) + ServerUtils.bin_eop, Filename="./" + ServerUtils.saved_mons_path + str(gen + 1) + ServerUtils.bin_eop)
         raw_data = GSCUtilsMisc.read_data(ServerUtils.saved_mons_path + str(gen + 1) + ServerUtils.bin_eop)
         if raw_data is not None:
             single_entry_len = len(checks.single_pokemon_checks_map)
@@ -333,7 +339,7 @@ class WebsocketServer (threading.Thread):
         if path.startswith("/link"):
             if processer in link_rooms[gen][identifier]:
                 link_rooms[gen][identifier].remove(processer)
-            if processer.other_ws is not None:
+            if processer is not None and processer.other_ws is not None:
                 other = processer.other
                 processer.other = None
                 processer.other_ws = None
@@ -341,7 +347,7 @@ class WebsocketServer (threading.Thread):
                 other.other_ws = None
                 await other.own_ws.close()
         if path.startswith("/pool"):
-            if processer.mon_index is not None and not processer.clear_pool:
+            if processer is not None and processer.mon_index is not None and not processer.clear_pool:
                 if processer.mon_index in in_use_mons[gen]:
                     in_use_mons[gen].remove(processer.mon_index)
 
