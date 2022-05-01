@@ -16,11 +16,13 @@ from utilities.gsc_trading_data_utils import *
 from utilities.rby_trading_data_utils import *
 
 s3 = boto3.client("s3")
+uploader = None
 
 total_rooms = 100000
 link_rooms = [[set()]*total_rooms,[set()]*total_rooms]
 mons = [[],[]]
 in_use_mons = [set(),set()]
+upload_after = 24
 
 class ServerUtils:
     saved_mons_path = "pool_mons"
@@ -37,7 +39,11 @@ class ServerUtils:
             elif gen == 0:
                 data += RBYUtils.single_mon_to_data(m[0], m[1])
         GSCUtilsMisc.write_data(ServerUtils.saved_mons_path + str(gen + 1) + ServerUtils.bin_eop, data)
-        s3.upload_file(Bucket="pokemon-gb-online-pool-gen1", Key=ServerUtils.saved_mons_path + str(gen + 1) + ServerUtils.bin_eop, Filename="./" + ServerUtils.saved_mons_path + str(gen + 1) + ServerUtils.bin_eop)
+        global uploader
+        if uploader is None:
+            uploader = DataUploader()
+            uploader.start()
+        uploader.to_up[gen] = True
     
     def load_mons(checks, gen):
         """
@@ -77,6 +83,21 @@ class ServerUtils:
                 in_use_mons[gen].add(new_index)
                 index = new_index
         return index, mons[gen][index]
+
+class DataUploader(threading.Thread):
+
+    def __init__(self):
+        threading.Thread.__init__(self)
+        self.setDaemon(True)
+        self.to_up = [False, False]
+    
+    def run(self):
+        sleep(upload_after*60)
+        global uploader
+        uploader = None
+        for gen in range(2):
+            if self.to_up[gen]:
+                s3.upload_file(Bucket="pokemon-gb-online-pool-gen1", Key=ServerUtils.saved_mons_path + str(gen + 1) + ServerUtils.bin_eop, Filename="./" + ServerUtils.saved_mons_path + str(gen + 1) + ServerUtils.bin_eop)
 
 class PoolTradeServer:
     """
