@@ -893,7 +893,7 @@ class GSCTrading:
                     self.check_reset_trade(to_server)
 
                     # Conclude the trade successfully
-                    next = self.wait_for_success(next)
+                    success_result = self.wait_for_success(next)
 
                     # Send it to the other player
                     self.verbose_print(GSCTradingStrings.success_send_str)
@@ -904,8 +904,8 @@ class GSCTrading:
                     self.force_receive(self.comms.get_success)
 
                     trade_completed = True
-                    next = self.swap_byte(next)
-                    next = self.wait_for_no_data(next, received_choice)
+                    next = self.swap_byte(success_result)
+                    next = self.wait_for_no_data(next, success_result)
                     next = self.wait_for_no_input(next)
                     self.verbose_print(GSCTradingStrings.restart_trade_str)
                     self.exit_or_new = False
