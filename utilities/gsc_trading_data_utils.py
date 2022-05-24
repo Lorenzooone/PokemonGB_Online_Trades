@@ -696,8 +696,8 @@ class GSCTradingData:
     trading_pokemon_pos = 0x15
     trading_pokemon_ot_pos = 0x135
     trading_pokemon_nickname_pos = 0x177
-    trading_pokemon_mail_pos = 0xCB
-    trading_pokemon_mail_sender_pos = 0x191
+    trading_pokemon_mail_pos = 0
+    trading_pokemon_mail_sender_pos = 0xC6
     
     trading_pokemon_length = 0x30
     trading_name_length = 0xB
@@ -854,12 +854,44 @@ class GSCTradingData:
         self.party_info.set_id(self.get_last_mon_index(), pa_info)
         self.pokemon[self.get_last_mon_index()] = po_data
 
-    def create_trading_data(self, lengths):
+    def create_patches_data(self, data, patch_set, patch_base, patch_start_info, is_mail=False):
+        """
+        Creates patch data (turns 0xFE into a patch offset)
+        """
+        patch_sets_num = 2
+        patch_sets_index = 0
+        if is_mail:
+            patch_sets_num = 1
+            patch_sets_index = 1
+        
+        base = patch_base[patch_sets_index]
+        start = patch_start_info[patch_sets_index]
+        i = 0
+        j = 0
+        while (patch_sets_num > 0) and ((start+i) < len(patch_set)) and ((base+j) < len(data)):
+            read_data = data[base+j]
+            if read_data == 0xFE:
+                data[base+j] = 0xFF
+                patch_set[start+i] = j+1
+                i+=1
+            j += 1
+            if j == 0xFC:
+                base += 0xFC
+                j = 0
+                patch_set[start+i] = 0xFF
+                i+=1
+                patch_sets_num -= 1
+                
+        if j != 0:
+            patch_set[start+i] = 0xFF
+            i+=1
+
+    def create_trading_data(self, lengths, patch_base, patch_start_info):
         """
         Creates the data which can be loaded to the hardware.
         """
         data = []
-        for i in range(2):
+        for i in range(3):
             data += [lengths[i]*[0]]
         data += [self.utils_class.no_mail_section[:len(self.utils_class.no_mail_section)]]
         GSCUtilsMisc.copy_to_data(data[1], self.trader_name_pos, self.trader.values, self.trading_name_length)
@@ -873,8 +905,10 @@ class GSCTradingData:
             GSCUtilsMisc.copy_to_data(data[1], self.trading_pokemon_ot_pos + (i * self.trading_name_length), self.pokemon[i].ot_name.values, self.trading_name_length)
             GSCUtilsMisc.copy_to_data(data[1], self.trading_pokemon_nickname_pos + (i * self.trading_name_length), self.pokemon[i].nickname.values, self.trading_name_length)
             if self.pokemon[i].mail is not None:
-                GSCUtilsMisc.copy_to_data(data[2], self.trading_pokemon_mail_pos + (i * self.trading_mail_length), self.pokemon[i].mail.values)
-                GSCUtilsMisc.copy_to_data(data[2], self.trading_pokemon_mail_sender_pos + (i * self.trading_mail_sender_length), self.pokemon[i].mail_sender.values, self.trading_mail_sender_length)
+                GSCUtilsMisc.copy_to_data(data[3], self.trading_pokemon_mail_pos + (i * self.trading_mail_length), self.pokemon[i].mail.values)
+                GSCUtilsMisc.copy_to_data(data[3], self.trading_pokemon_mail_sender_pos + (i * self.trading_mail_sender_length), self.pokemon[i].mail_sender.values, self.trading_mail_sender_length)
+        self.create_patches_data(data[1], data[2], patch_base, patch_start_info)
+        self.create_patches_data(data[3], data[3], patch_base, patch_start_info, is_mail=True)
         return data
     
 class GSCChecks:
@@ -948,9 +982,10 @@ class GSCChecks:
             self = args[0]
             val = args[1]
             if self.do_sanity_checks:
-                return func(*args, **kwargs)
-            else:
-                return val
+                val = func(*args, **kwargs)
+            if val == 0xFE:
+                return 0xFF
+            return val
         return wrapper
     
     def valid_check_sanity_checks(func):
@@ -989,7 +1024,7 @@ class GSCChecks:
 
     def prepare_checks_map(self, data, lengths, functions_list):
         raw_data_sections = GSCUtilsMisc.divide_data(data, lengths)
-        call_map = [[],[],[]]
+        call_map = [[],[],[],[]]
         for i in range(len(raw_data_sections)):
             call_map[i] = GSCUtilsLoaders.prepare_functions_map(raw_data_sections[i], functions_list)
         return call_map

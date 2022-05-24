@@ -13,7 +13,6 @@ class RBYTradingClient(GSCTradingClient):
     single_transfer = "SNG1"
     pool_transfer = "POL1"
     moves_transfer = "MVS1"
-    mail_transfer = "MAI1"
     choice_transfer = "CHC1"
     accept_transfer = "ACP1"
     success_transfer = "SUC1"
@@ -24,7 +23,6 @@ class RBYTradingClient(GSCTradingClient):
         single_transfer: {7},
         pool_transfer: {1 + 0x42, 1 + 1}, # Counter + Single Pokémon OR Counter + Fail
         moves_transfer: {1 + 1 + 8}, # Counter + Species + Moves
-        mail_transfer : {1 + 0xC5}, # Counter + Mail
         choice_transfer : {1 + 1 + 0x42, 1 + 1}, # Counter + Choice + Single Pokémon OR Counter + Stop
         accept_transfer : {1 + 1}, # Counter + Accept
         success_transfer : {1 + 1}, # Counter + Success
@@ -83,6 +81,8 @@ class RBYTrading(GSCTrading):
     next_section = 0xFD
     no_input = 0xFE
     drop_bytes_checks = [[0xA, 0x19F, 0xC5], [next_section, next_section, no_input], [0,0,0]]
+    patch_set_base_pos = [0x11, 0]
+    patch_set_start_info_pos = [7, 0x11A]
     stop_trade = 0x6F
     first_trade_index = 0x60
     decline_trade = 0x61
@@ -103,4 +103,23 @@ class RBYTrading(GSCTrading):
     
     def get_checks(self, menu):
         return RBYChecks(self.special_sections_len, menu.do_sanity_checks)
-            
+
+    def trade_starting_sequence(self, buffered, send_data = [None, None, None, None]):
+        """
+        Handles exchanging with the device the three data sections which
+        are needed in order to trade.
+        Optimizes the synchronous mail_data exchange by executing it only
+        if necessary and in the way which requires less packet transfers.
+        Returns the player's data and the other player's data.
+        """
+        # Prepare checks
+        self.checks.reset_species_item_list()
+        # Send and get the sections
+        random_data, random_data_other = self.read_section(0, send_data[0], buffered)
+        pokemon_data, pokemon_data_other = self.read_section(1, send_data[1], buffered)
+        patches_data, patches_data_other = self.read_section(2, send_data[2], buffered)
+        
+        self.apply_patches(pokemon_data, patches_data)
+        self.apply_patches(pokemon_data_other, patches_data_other)
+        
+        return [random_data, pokemon_data, []], [random_data_other, pokemon_data_other, []]

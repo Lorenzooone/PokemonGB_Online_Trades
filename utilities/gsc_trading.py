@@ -22,11 +22,11 @@ class GSCTradingClient:
     buffered_transfer = "BUF2"
     negotiation_transfer = "NEG2"
     possible_transfers = {
-        full_transfer: {0x412}, # Sum of special_sections_len
+        full_transfer: {0x412, 0x40C}, # Sum of special_sections_len - Ver 1.0 and 2.0
         single_transfer: {7},
         pool_transfer: {1 + 0x75 + 1, 1 + 1}, # Counter + Single Pokémon + Egg OR Counter + Fail
         moves_transfer: {1 + 8}, # Counter + Moves
-        mail_transfer : {1 + 0x24C}, # Counter + Mail
+        mail_transfer : {1 + 0x24C, 1 + 0x181}, # Counter + Mail - Ver 1.0 and 2.0
         choice_transfer : {1 + 1 + 0x75 + 1, 1 + 1}, # Counter + Choice + Single Pokémon + Egg OR Counter + Stop
         accept_transfer : {1 + 1}, # Counter + Accept
         success_transfer : {1 + 1}, # Counter + Success
@@ -369,15 +369,19 @@ class GSCTrading:
     start_trading_states = [[0x75, 0x75, 0x76], [{0x75}, {0}, {0xFD}]]
     success_values = set(range(0x70, 0x80))
     possible_indexes = set(range(0x70, 0x80))
-    fillers = [{}, {}, {}]
+    fillers = [{}, {}, {}, {}]
     filler_value = 0xFE00
     last_filler_value = 0xFEFF
     max_consecutive_no_data = 0x100
     next_section = 0xFD
+    mail_next_section = 0x20
+    patch_set_base_pos = [0x13, 0]
+    patch_set_start_info_pos = [7, 0x11A]
     no_input = 0xFE
     no_data = 0
-    special_sections_len = [0xA, 0x1BC, 0x24C]
-    drop_bytes_checks = [[0xA, 0x1B9, 0x1E6], [next_section, next_section, no_input], [0,0,0]]
+    special_sections_len = [0xA, 0x1BC, 0xC5, 0x181]
+    special_sections_starter = [next_section, next_section, next_section, mail_next_section]
+    drop_bytes_checks = [[0xA, 0x1B9, 0xC5, 0x181], [next_section, next_section, mail_next_section, no_input], [0,0,0,0]]
     stop_trade = 0x7F
     first_trade_index = 0x70
     decline_trade = 0x71
@@ -465,7 +469,7 @@ class GSCTrading:
                 self.printed_warning_drop = True
     
     def get_mail_section_id(self):
-        return 2
+        return 3
     
     def get_printable_index(self, index):
         return index+1
@@ -487,7 +491,7 @@ class GSCTrading:
         Reads a data section and sends it to the device.
         """
         length = self.get_section_length(index)
-        next = self.next_section
+        next = self.special_sections_starter[index]
         checker = self.get_checker(index)
         
         # Prepare sanity checks stuff
@@ -517,7 +521,7 @@ class GSCTrading:
                 self.verbose_print(GSCTradingStrings.arrived_synchro_str)
 
         # Sync with the device and start the actual trade
-        while next == self.next_section:
+        while next == self.special_sections_starter[index]:
             next = self.swap_byte(next)
         # next now contains the first received byte from the device!
 
@@ -943,8 +947,30 @@ class GSCTrading:
         if self.exit_or_new:
             self.verbose_print(GSCTradingStrings.sit_table_str)
         return self.send_predefined_section(self.start_trading_states, die_on_no_data=True)
+    
+    def apply_patches(self, data, patch_set, is_mail=False):
+        """
+        Applies patch data (turns the previously read data into 0xFE)
+        """
+        patch_sets_num = 2
+        patch_sets_index = 0
+        if is_mail:
+            patch_sets_num = 1
+            patch_sets_index = 1
         
-    def trade_starting_sequence(self, buffered, send_data = [None, None, None]):
+        base = self.patch_set_base_pos[patch_sets_index]
+        start = self.patch_set_start_info_pos[patch_sets_index]
+        i = 0
+        while (patch_sets_num > 0) and ((start+i) < len(patch_set)):
+            read_pos = patch_set[start+i]
+            i += 1
+            if read_pos == 0xFF:
+                patch_sets_num -= 1
+                base += 0xFC
+            elif read_pos > 0 and (read_pos+base) < len(data):
+                data[read_pos+base-1] = 0xFE
+        
+    def trade_starting_sequence(self, buffered, send_data = [None, None, None, None]):
         """
         Handles exchanging with the device the three data sections which
         are needed in order to trade.
@@ -957,7 +983,11 @@ class GSCTrading:
         # Send and get the first two sections
         random_data, random_data_other = self.read_section(0, send_data[0], buffered)
         pokemon_data, pokemon_data_other = self.read_section(1, send_data[1], buffered)
+        patches_data, patches_data_other = self.read_section(2, send_data[2], buffered)
         
+        self.apply_patches(pokemon_data, patches_data)
+        self.apply_patches(pokemon_data_other, patches_data_other)
+                
         pokemon_own = self.party_reader(pokemon_data)
         pokemon_other = self.party_reader(pokemon_data_other)
         pokemon_own_mail = pokemon_own.party_has_mail()
@@ -965,21 +995,23 @@ class GSCTrading:
         
         # Trade mail data only if needed
         if (pokemon_own_mail and pokemon_other_mail) or buffered:
-            send_data[2] = self.convert_mail_data(send_data[2], True)
-            mail_data, mail_data_other = self.read_section(self.get_mail_section_id(), send_data[2], buffered)
+            send_data[3] = self.convert_mail_data(send_data[3], True)
+            mail_data, mail_data_other = self.read_section(self.get_mail_section_id(), send_data[3], buffered)
+            self.apply_patches(mail_data, mail_data, is_mail=True)
             mail_data = self.convert_mail_data(mail_data, False)
         else:
-            send_data[2] = self.utils_class.no_mail_section
+            send_data[3] = self.utils_class.no_mail_section
             # Get mail data if only the other client has it
             if pokemon_other_mail:
                 self.verbose_print(GSCTradingStrings.mail_other_data_str)
-                send_data[2] = self.force_receive(self.comms.get_mail_data_only)
+                send_data[3] = self.force_receive(self.comms.get_mail_data_only)
             else:
                 self.verbose_print(GSCTradingStrings.no_mail_other_data_str)
                 
             # Exchange mail data with the device
-            send_data[2] = self.convert_mail_data(send_data[2], True)
-            mail_data, mail_data_other = self.read_section(self.get_mail_section_id(), send_data[2], True)
+            send_data[3] = self.convert_mail_data(send_data[3], True)
+            mail_data, mail_data_other = self.read_section(self.get_mail_section_id(), send_data[3], True)
+            self.apply_patches(mail_data, mail_data, is_mail=True)
             mail_data = self.convert_mail_data(mail_data, False)
             
             # Send mail data if only this client has it
@@ -1000,7 +1032,7 @@ class GSCTrading:
             # Generate the trading data for the device
             # from the other player's one and use it
             self.verbose_print(GSCTradingStrings.recycle_data_str)
-            data, data_other = self.trade_starting_sequence(True, send_data=self.other_pokemon.create_trading_data(self.special_sections_len))
+            data, data_other = self.trade_starting_sequence(True, send_data=self.other_pokemon.create_trading_data(self.special_sections_len, self.patch_set_base_pos, self.patch_set_start_info_pos))
         self.own_pokemon = self.party_reader(data[1], data_mail=data[2])
         self.other_pokemon = self.party_reader(data_other[1], data_mail=data_other[2])
         return True
@@ -1020,7 +1052,7 @@ class GSCTrading:
         else:
             # Generate the trading data for the device
             # from the other player's one and use it
-            data = self.other_pokemon.create_trading_data(self.special_sections_len)
+            data = self.other_pokemon.create_trading_data(self.special_sections_len, self.patch_set_base_pos, self.patch_set_start_info_pos)
             valid = True
             self.verbose_print(GSCTradingStrings.recycle_data_str)
         data, data_other = self.trade_starting_sequence(True, send_data=data)
@@ -1067,7 +1099,7 @@ class GSCTrading:
                 # Generate the trading data for the device
                 # from the other player's one and use it
                 self.verbose_print(GSCTradingStrings.reuse_data_str)
-                data, data_other = self.trade_starting_sequence(True, send_data=self.other_pokemon.create_trading_data(self.special_sections_len))
+                data, data_other = self.trade_starting_sequence(True, send_data=self.other_pokemon.create_trading_data(self.special_sections_len, self.patch_set_base_pos, self.patch_set_start_info_pos))
                 
                 # If only this client requires user inputs,
                 # send its data
@@ -1104,7 +1136,7 @@ class GSCTrading:
                 self.other_pokemon = self.force_receive(self.comms.get_pool_trading_data)
             else:
                 self.verbose_print(GSCTradingStrings.pool_recycle_data_str)
-            data, data_other = self.trade_starting_sequence(True, send_data=self.other_pokemon.create_trading_data(self.special_sections_len))
+            data, data_other = self.trade_starting_sequence(True, send_data=self.other_pokemon.create_trading_data(self.special_sections_len, self.patch_set_base_pos, self.patch_set_start_info_pos))
             self.own_pokemon = self.party_reader(data[1], data_mail=data[2])
 
             # Start interacting with the trading menu
