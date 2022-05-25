@@ -983,8 +983,6 @@ class GSCChecks:
             val = args[1]
             if self.do_sanity_checks:
                 val = func(*args, **kwargs)
-            if val == 0xFE:
-                return 0xFF
             return val
         return wrapper
     

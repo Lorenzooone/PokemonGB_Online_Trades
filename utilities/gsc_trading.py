@@ -378,6 +378,7 @@ class GSCTrading:
     patch_set_base_pos = [0x13, 0]
     patch_set_start_info_pos = [7, 0x11A]
     no_input = 0xFE
+    no_input_alternative = 0xFF
     no_data = 0
     special_sections_len = [0xA, 0x1BC, 0xC5, 0x181]
     special_sections_starter = [next_section, next_section, next_section, mail_next_section]
@@ -485,6 +486,14 @@ class GSCTrading:
         Handles converting the mail data.
         """
         return data
+    
+    def prevent_no_input(self, val):
+        """
+        Sending 0xFE would be problematic!
+        """
+        if val == self.no_input:
+            return self.no_input_alternative
+        return val
                     
     def read_section(self, index, send_data, buffered):
         """
@@ -533,7 +542,7 @@ class GSCTrading:
             i = 0
             while i < (length-1):
                 if send_data is not None:
-                    next = checker[i](send_data[i])
+                    next = self.prevent_no_input(checker[i](send_data[i]))
                     send_data[i] = next
                 next_i = i+1
                 if next_i not in self.fillers[index].keys():
@@ -553,7 +562,7 @@ class GSCTrading:
             
             if send_data is not None:
                 # Send the last byte too
-                next = checker[length-1](send_data[length-1])
+                next = self.prevent_no_input(checker[length-1](send_data[length-1]))
                 send_data[length-1] = next
             self.swap_byte(next)
             self.verbose_print(GSCTradingStrings.transfer_to_hardware_str.format(index=self.get_printable_index(index), completion=GSCTradingStrings.x_out_of_y_str(length, length)), end='')
@@ -582,7 +591,7 @@ class GSCTrading:
                             recv_data = self.get_swappable_bytes(recv_buf, length, index)
                         if i in recv_data.keys() and (i < length):
                             # Clean it and send it
-                            cleaned_byte = checker[i](recv_data[i])
+                            cleaned_byte = self.prevent_no_input(checker[i](recv_data[i]))
                             next_i = i+1
                             # Handle fillers
                             if next_i in self.fillers[index].keys():
