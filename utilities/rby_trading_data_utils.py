@@ -22,6 +22,8 @@ class RBYUtils(GSCUtils):
     stat_id_base_conv_table = [0,1,2,3,4]
     stat_id_iv_conv_table = [0,0,1,2,3]
     stat_id_exp_conv_table = [0,1,2,3,4]
+    patch_set_base_pos = [0x13]
+    patch_set_start_info_pos = [7]
     num_stats = 5
     
     types_list = None
@@ -52,6 +54,11 @@ class RBYUtils(GSCUtils):
     def get_evolution_item(species):
         return None
     
+    def get_patch_set_num_index(is_mail, is_japanese):
+        patch_sets_num = 2
+        patch_sets_index = 0
+        return patch_sets_num, patch_sets_index
+    
     def single_mon_from_data(checks, data):
         ret = None
         
@@ -59,6 +66,7 @@ class RBYUtils(GSCUtils):
         checks.reset_species_item_list()
         checks.set_single_team_size()
         checks.prepare_text_buffer()
+        checks.prepare_patch_sets_buffer()
         checks.prepare_species_buffer()
         checker = checks.single_pokemon_checks_map
         
@@ -225,6 +233,24 @@ class RBYTradingData(GSCTradingData):
         if curr_learning is not None:
             return True
         return False
+
+    def create_trading_data(self, lengths):
+        """
+        Creates the data which can be loaded to the hardware.
+        """
+        data = []
+        for i in range(3):
+            data += [lengths[i]*[0]]
+        GSCUtilsMisc.copy_to_data(data[1], self.trader_name_pos, self.trader.values, self.trading_name_length)
+        data[1][self.trading_party_info_pos] = self.get_party_size()
+        GSCUtilsMisc.copy_to_data(data[1], self.trading_party_info_pos + 1, self.party_info.actual_mons)
+        data[1][self.trading_party_final_pos] = 0xFF
+        for i in range(self.get_party_size()):
+            GSCUtilsMisc.copy_to_data(data[1], self.trading_pokemon_pos + (i * self.trading_pokemon_length), self.pokemon[i].values)
+            GSCUtilsMisc.copy_to_data(data[1], self.trading_pokemon_ot_pos + (i * self.trading_name_length), self.pokemon[i].ot_name.values, self.trading_name_length)
+            GSCUtilsMisc.copy_to_data(data[1], self.trading_pokemon_nickname_pos + (i * self.trading_name_length), self.pokemon[i].nickname.values, self.trading_name_length)
+        self.utils_class.create_patches_data(data[1], data[2], self.utils_class)
+        return data
 
 class RBYChecks(GSCChecks):
     """
