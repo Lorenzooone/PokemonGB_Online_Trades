@@ -132,6 +132,8 @@ class GSCUtils:
     stat_id_base_conv_table = [0,1,2,5,3,4]
     stat_id_iv_conv_table = [0,0,1,2,3,3]
     stat_id_exp_conv_table = [0,1,2,3,4,4]
+    patch_set_base_pos = [0x13, 0, 0]
+    patch_set_start_info_pos = [7, 0x11A, 0xFC]
     egg_value = 0x38
     min_level = 2
     max_level = 100
@@ -233,6 +235,62 @@ class GSCUtils:
     def get_evolution_item(species):
         return GSCUtils.evolution_ids[species][1]
     
+    def get_patch_set_num_index(is_mail, is_japanese):
+        patch_sets_num = 2
+        patch_sets_index = 0
+        if is_mail:
+            patch_sets_num = 1
+            patch_sets_index = 1
+            if is_japanese:
+                patch_sets_index = 2
+        return patch_sets_num, patch_sets_index
+    
+    def apply_patches(data, patch_set, utils_class, is_mail=False, is_japanese=False):
+        """
+        Applies patch data (turns the previously read data into 0xFE)
+        """
+        patch_sets_num, patch_sets_index = utils_class.get_patch_set_num_index(is_mail, is_japanese)
+        
+        base = utils_class.patch_set_base_pos[patch_sets_index]
+        start = utils_class.patch_set_start_info_pos[patch_sets_index]
+        i = 0
+        while (patch_sets_num > 0) and ((start+i) < len(patch_set)):
+            read_pos = patch_set[start+i]
+            i += 1
+            if read_pos == 0xFF:
+                patch_sets_num -= 1
+                base += 0xFC
+            elif read_pos > 0 and (read_pos+base) < len(data):
+                data[read_pos+base-1] = 0xFE
+
+    def create_patches_data(data, patch_set, utils_class, is_mail=False, is_japanese=False):
+        """
+        Creates patch data (turns 0xFE into a patch offset)
+        """
+        patch_sets_num, patch_sets_index = utils_class.get_patch_set_num_index(is_mail, is_japanese)
+        
+        base = utils_class.patch_set_base_pos[patch_sets_index]
+        start = utils_class.patch_set_start_info_pos[patch_sets_index]
+        i = 0
+        j = 0
+        while (patch_sets_num > 0) and ((start+i) < len(patch_set)) and ((base+j) < len(data)):
+            read_data = data[base+j]
+            if read_data == 0xFE:
+                data[base+j] = 0xFF
+                patch_set[start+i] = j+1
+                i+=1
+            j += 1
+            if j == 0xFC:
+                base += 0xFC
+                j = 0
+                patch_set[start+i] = 0xFF
+                i+=1
+                patch_sets_num -= 1
+                
+        if j != 0:
+            patch_set[start+i] = 0xFF
+            i+=1
+    
     def single_mon_from_data(checks, data):
         ret = None
         
@@ -240,6 +298,7 @@ class GSCUtils:
         checks.reset_species_item_list()
         checks.set_single_team_size()
         checks.prepare_text_buffer()
+        checks.prepare_patch_sets_buffer()
         checks.prepare_species_buffer()
         checker = checks.single_pokemon_checks_map
         
@@ -824,6 +883,7 @@ class GSCTradingData:
         checks.reset_species_item_list()
         checks.set_single_team_size()
         checks.prepare_text_buffer()
+        checks.prepare_patch_sets_buffer()
         checks.prepare_species_buffer()
         
         # Apply checks
@@ -854,39 +914,7 @@ class GSCTradingData:
         self.party_info.set_id(self.get_last_mon_index(), pa_info)
         self.pokemon[self.get_last_mon_index()] = po_data
 
-    def create_patches_data(self, data, patch_set, patch_base, patch_start_info, is_mail=False):
-        """
-        Creates patch data (turns 0xFE into a patch offset)
-        """
-        patch_sets_num = 2
-        patch_sets_index = 0
-        if is_mail:
-            patch_sets_num = 1
-            patch_sets_index = 1
-        
-        base = patch_base[patch_sets_index]
-        start = patch_start_info[patch_sets_index]
-        i = 0
-        j = 0
-        while (patch_sets_num > 0) and ((start+i) < len(patch_set)) and ((base+j) < len(data)):
-            read_data = data[base+j]
-            if read_data == 0xFE:
-                data[base+j] = 0xFF
-                patch_set[start+i] = j+1
-                i+=1
-            j += 1
-            if j == 0xFC:
-                base += 0xFC
-                j = 0
-                patch_set[start+i] = 0xFF
-                i+=1
-                patch_sets_num -= 1
-                
-        if j != 0:
-            patch_set[start+i] = 0xFF
-            i+=1
-
-    def create_trading_data(self, lengths, patch_base, patch_start_info):
+    def create_trading_data(self, lengths):
         """
         Creates the data which can be loaded to the hardware.
         """
@@ -907,8 +935,8 @@ class GSCTradingData:
             if self.pokemon[i].mail is not None:
                 GSCUtilsMisc.copy_to_data(data[3], self.trading_pokemon_mail_pos + (i * self.trading_mail_length), self.pokemon[i].mail.values)
                 GSCUtilsMisc.copy_to_data(data[3], self.trading_pokemon_mail_sender_pos + (i * self.trading_mail_sender_length), self.pokemon[i].mail_sender.values, self.trading_mail_sender_length)
-        self.create_patches_data(data[1], data[2], patch_base, patch_start_info)
-        self.create_patches_data(data[3], data[3], patch_base, patch_start_info, is_mail=True)
+        self.utils_class.create_patches_data(data[1], data[2])
+        self.utils_class.create_patches_data(data[3], data[3], is_mail=True)
         return data
     
 class GSCChecks:
@@ -925,10 +953,18 @@ class GSCChecks:
     checks_map_path = "checks_map.bin"
     single_pokemon_checks_map_path = "single_pokemon_checks_map.bin"
     moves_checks_map_path = "moves_checks_map.bin"
+    pokemon_patch_set_0_path = "pokemon_patch_set_0.bin"
+    pokemon_patch_set_1_path = "pokemon_patch_set_1.bin"
+    mail_patch_set_path = "mail_patch_set.bin"
+    japanese_mail_patch_set_path = "japanese_mail_patch_set.bin"
+    
     curr_exp_pos_masks = [0, 0xFF0000, 0xFFFF00]
     free_value_species = 0xFF
     empty_value_species = 0
     free_value_moves = 0
+    no_conversion_patch = 0
+    end_of_patch = 0xFF
+    patch_set_cover = 0xFC
     tackle_id = 0x21
     rattata_id = 0x13
     question_mark = 0xE6
@@ -941,6 +977,9 @@ class GSCChecks:
         self.bad_ids_moves = GSCUtilsLoaders.prepare_check_list(GSCUtilsMisc.read_data(self.get_path(self.bad_ids_moves_path)))
         self.bad_ids_pokemon = GSCUtilsLoaders.prepare_check_list(GSCUtilsMisc.read_data(self.get_path(self.bad_ids_pokemon_path)))
         self.bad_ids_text = GSCUtilsLoaders.prepare_check_list(GSCUtilsMisc.read_data(self.get_path(self.bad_ids_text_path)))
+        self.pokemon_patch_sets = [GSCUtilsLoaders.prepare_check_list(GSCUtilsMisc.read_data(self.get_path(self.pokemon_patch_set_0_path))), GSCUtilsLoaders.prepare_check_list(GSCUtilsMisc.read_data(self.get_path(self.pokemon_patch_set_1_path)))]
+        self.mail_patch_set = [GSCUtilsLoaders.prepare_check_list(GSCUtilsMisc.read_data(self.get_path(self.mail_patch_set_path)))]
+        self.japanese_mail_patch_set = [GSCUtilsLoaders.prepare_check_list(GSCUtilsMisc.read_data(self.get_path(self.mail_patch_set_path)))]
         self.check_functions = [
             self.clean_nothing,
             self.clean_text,
@@ -964,7 +1003,10 @@ class GSCChecks:
             self.clean_species_force_terminate,
             self.clean_mail_species,
             self.clean_mail_item,
-            self.clean_mail_same_species
+            self.clean_mail_same_species,
+            self.clean_pokemon_patch_set,
+            self.clean_mail_patch_set,
+            self.clean_japanese_mail_patch_set
             ]
         self.checks_map = self.prepare_checks_map(GSCUtilsMisc.read_data(self.get_path(self.checks_map_path)), section_sizes, self.check_functions)
         self.single_pokemon_checks_map = GSCUtilsLoaders.prepare_functions_map(GSCUtilsMisc.read_data(self.get_path(self.single_pokemon_checks_map_path)), self.check_functions)
@@ -994,12 +1036,6 @@ class GSCChecks:
             else:
                 return True
         return wrapper
-    
-    def apply_checks_to_data(self, checker, data):
-        new_data = list(data)
-        for j in range(len(checker)):
-            new_data[j] = checker[j](data[j])
-        return new_data
 
     def prepare_text_buffer(self):
         self.curr_text = []
@@ -1019,6 +1055,9 @@ class GSCChecks:
         
     def prepare_species_buffer(self):
         self.curr_species_pos = 0
+        
+    def prepare_patch_sets_buffer(self):
+        self.curr_patch_set = 0
 
     def prepare_checks_map(self, data, lengths, functions_list):
         raw_data_sections = GSCUtilsMisc.divide_data(data, lengths)
@@ -1026,6 +1065,12 @@ class GSCChecks:
         for i in range(len(raw_data_sections)):
             call_map[i] = GSCUtilsLoaders.prepare_functions_map(raw_data_sections[i], functions_list)
         return call_map
+
+    def prepare_patch_set(self, data):
+        new_data = [False] * self.patch_set_cover
+        for d in data:
+            new_data[d] = True
+        return new_data
     
     @clean_check_sanity_checks
     def clean_nothing(self, val):
@@ -1250,6 +1295,26 @@ class GSCChecks:
     @clean_check_sanity_checks
     def clean_egg_cycles_friendship(self, cycles_friendship):
         return cycles_friendship
+    
+    def check_patch_set(self, val, patch_sets):
+        if self.curr_patch_set >= len(patch_sets):
+            return self.no_conversion_patch
+        if val == self.end_of_patch
+            self.curr_patch_set += 1
+            return val
+        return GSCUtilsMisc.check_normal_list(patch_sets[self.curr_patch_set], val)
+    
+    @clean_check_sanity_checks
+    def clean_pokemon_patch_set(self, val):
+        return self.check_patch_set(val, self.pokemon_patch_sets)
+    
+    @clean_check_sanity_checks
+    def clean_mail_patch_set(self, val):
+        return self.check_patch_set(val, self.mail_patch_set)
+    
+    @clean_check_sanity_checks
+    def clean_japanese_mail_patch_set(self, val):
+        return self.check_patch_set(val, self.japanese_mail_patch_set)
     
     def clean_value(self, value, checker, default_value):
         if checker(value):

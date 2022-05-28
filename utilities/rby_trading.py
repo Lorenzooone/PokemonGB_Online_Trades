@@ -81,8 +81,6 @@ class RBYTrading(GSCTrading):
     next_section = 0xFD
     no_input = 0xFE
     drop_bytes_checks = [[0xA, 0x19F, 0xC5], [next_section, next_section, no_input], [0,0,0]]
-    patch_set_base_pos = [0x11, 0]
-    patch_set_start_info_pos = [7, 0x11A]
     stop_trade = 0x6F
     first_trade_index = 0x60
     decline_trade = 0x61
@@ -122,4 +120,4 @@ class RBYTrading(GSCTrading):
         self.apply_patches(pokemon_data, patches_data)
         self.apply_patches(pokemon_data_other, patches_data_other)
         
-        return [random_data, pokemon_data, []], [random_data_other, pokemon_data_other, []]
+        return [random_data, pokemon_data, None], [random_data_other, pokemon_data_other, None]
