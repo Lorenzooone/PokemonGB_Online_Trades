@@ -26,7 +26,7 @@ class GSCTradingClient:
         single_transfer: {7},
         pool_transfer: {1 + 0x75 + 1, 1 + 1}, # Counter + Single Pokémon + Egg OR Counter + Fail
         moves_transfer: {1 + 8}, # Counter + Moves
-        mail_transfer : {1 + 0x24C, 1 + 0x181}, # Counter + Mail - Ver 1.0 and 2.0
+        mail_transfer : {1 + 0x24C}, # Counter + Mail - Ver 1.0
         choice_transfer : {1 + 1 + 0x75 + 1, 1 + 1}, # Counter + Choice + Single Pokémon + Egg OR Counter + Stop
         accept_transfer : {1 + 1}, # Counter + Accept
         success_transfer : {1 + 1}, # Counter + Success
@@ -63,18 +63,6 @@ class GSCTradingClient:
         Print if verbose...
         """
         GSCUtilsMisc.verbose_print(to_print, self.verbose, end=end)
-    
-    def get_mail_data_only(self):
-        """
-        Handles getting the mail data when only the other player has mail.
-        """
-        return self.get_with_counter(self.mail_transfer)
-        
-    def send_mail_data_only(self, data):
-        """
-        Handles sending the mail data when the other player has no mail.
-        """
-        self.send_with_counter(self.mail_transfer, data)
     
     def get_success(self):
         """
@@ -267,7 +255,10 @@ class GSCTradingClient:
         """
         Handles sending the player's entire trading data.
         """
-        self.connection.send_data(self.full_transfer, data[0]+data[1]+data[2])
+        final_data = []
+        for i in range(len(data)):
+            final_data += data[i]
+        self.connection.send_data(self.full_transfer, final_data)
         
     def get_pool_trading_data(self):
         """
@@ -980,28 +971,18 @@ class GSCTrading:
         pokemon_other_mail = pokemon_other.party_has_mail()
         
         # Trade mail data only if needed
-        if (pokemon_own_mail and pokemon_other_mail) or buffered:
+        if (pokemon_own_mail or pokemon_other_mail) or buffered:
             send_data[3] = self.convert_mail_data(send_data[3], True)
             mail_data, mail_data_other = self.read_section(self.get_mail_section_id(), send_data[3], buffered)
             mail_data = self.convert_mail_data(mail_data, False)
         else:
             send_data[3] = self.utils_class.no_mail_section
-            # Get mail data if only the other client has it
-            if pokemon_other_mail:
-                self.verbose_print(GSCTradingStrings.mail_other_data_str)
-                send_data[3] = self.force_receive(self.comms.get_mail_data_only)
-            else:
-                self.verbose_print(GSCTradingStrings.no_mail_other_data_str)
+            self.verbose_print(GSCTradingStrings.no_mail_other_data_str)
                 
             # Exchange mail data with the device
             send_data[3] = self.convert_mail_data(send_data[3], True)
             mail_data, mail_data_other = self.read_section(self.get_mail_section_id(), send_data[3], True)
             mail_data = self.convert_mail_data(mail_data, False)
-            
-            # Send mail data if only this client has it
-            if pokemon_own_mail:
-                self.verbose_print(GSCTradingStrings.send_mail_other_data_str)
-                self.comms.send_mail_data_only(mail_data)
         
         # Apply patches for the mail data
         self.utils_class.apply_patches(mail_data, mail_data, self.utils_class, is_mail=True)
@@ -1044,9 +1025,9 @@ class GSCTrading:
             valid = True
             self.verbose_print(GSCTradingStrings.recycle_data_str)
         data, data_other = self.trade_starting_sequence(True, send_data=data)
-        self.comms.send_big_trading_data(data)
         self.own_pokemon = self.party_reader(data[1], data_mail=data[2])
         self.other_pokemon = self.party_reader(data_other[1], data_mail=data_other[2])
+        self.comms.send_big_trading_data(self.own_pokemon.create_trading_data(self.special_sections_len))
         return valid
 
     def player_trade(self, buffered):
