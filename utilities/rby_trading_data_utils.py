@@ -249,7 +249,7 @@ class RBYTradingData(GSCTradingData):
             GSCUtilsMisc.copy_to_data(data[1], self.trading_pokemon_pos + (i * self.trading_pokemon_length), self.pokemon[i].values)
             GSCUtilsMisc.copy_to_data(data[1], self.trading_pokemon_ot_pos + (i * self.trading_name_length), self.pokemon[i].ot_name.values, self.trading_name_length)
             GSCUtilsMisc.copy_to_data(data[1], self.trading_pokemon_nickname_pos + (i * self.trading_name_length), self.pokemon[i].nickname.values, self.trading_name_length)
-        self.utils_class.create_patches_data(data[1], data[2])
+        self.utils_class.create_patches_data(data[1], data[2], self.utils_class)
         return data
 
 class RBYChecks(GSCChecks):

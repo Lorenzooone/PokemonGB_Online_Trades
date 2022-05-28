@@ -1036,6 +1036,12 @@ class GSCChecks:
             else:
                 return True
         return wrapper
+    
+    def apply_checks_to_data(self, checker, data):
+        new_data = list(data)
+        for j in range(len(checker)):
+            new_data[j] = checker[j](data[j])
+        return new_data
 
     def prepare_text_buffer(self):
         self.curr_text = []
@@ -1065,12 +1071,6 @@ class GSCChecks:
         for i in range(len(raw_data_sections)):
             call_map[i] = GSCUtilsLoaders.prepare_functions_map(raw_data_sections[i], functions_list)
         return call_map
-
-    def prepare_patch_set(self, data):
-        new_data = [False] * self.patch_set_cover
-        for d in data:
-            new_data[d] = True
-        return new_data
     
     @clean_check_sanity_checks
     def clean_nothing(self, val):

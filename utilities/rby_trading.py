@@ -117,7 +117,7 @@ class RBYTrading(GSCTrading):
         pokemon_data, pokemon_data_other = self.read_section(1, send_data[1], buffered)
         patches_data, patches_data_other = self.read_section(2, send_data[2], buffered)
         
-        self.apply_patches(pokemon_data, patches_data)
-        self.apply_patches(pokemon_data_other, patches_data_other)
+        self.utils_class.apply_patches(pokemon_data, patches_data, self.utils_class)
+        self.utils_class.apply_patches(pokemon_data_other, patches_data_other, self.utils_class)
         
         return [random_data, pokemon_data, None], [random_data_other, pokemon_data_other, None]
