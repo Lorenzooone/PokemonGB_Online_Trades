@@ -503,7 +503,7 @@ class GSCTrading:
         
         # Prepare sanity checks stuff
         self.checks.prepare_text_buffer()
-        checks.prepare_patch_sets_buffer()
+        self.checks.prepare_patch_sets_buffer()
         self.checks.prepare_species_buffer()
 
         if not buffered:
@@ -971,8 +971,8 @@ class GSCTrading:
         pokemon_data, pokemon_data_other = self.read_section(1, send_data[1], buffered)
         # Get and apply patches for the Pokémon data
         patches_data, patches_data_other = self.read_section(2, send_data[2], buffered)
-        self.utils_class.apply_patches(pokemon_data, patches_data)
-        self.utils_class.apply_patches(pokemon_data_other, patches_data_other)
+        self.utils_class.apply_patches(pokemon_data, patches_data, self.utils_class)
+        self.utils_class.apply_patches(pokemon_data_other, patches_data_other, self.utils_class)
                 
         pokemon_own = self.party_reader(pokemon_data)
         pokemon_other = self.party_reader(pokemon_data_other)
@@ -1004,8 +1004,8 @@ class GSCTrading:
                 self.comms.send_mail_data_only(mail_data)
         
         # Apply patches for the mail data
-        self.utils_class.apply_patches(mail_data, mail_data, is_mail=True)
-        self.utils_class.apply_patches(mail_data_other, mail_data_other, is_mail=True)
+        self.utils_class.apply_patches(mail_data, mail_data, self.utils_class, is_mail=True)
+        self.utils_class.apply_patches(mail_data_other, mail_data_other, self.utils_class, is_mail=True)
         
         return [random_data, pokemon_data, mail_data], [random_data_other, pokemon_data_other, mail_data_other]
     

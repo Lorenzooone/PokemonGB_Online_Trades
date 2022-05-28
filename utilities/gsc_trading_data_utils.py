@@ -132,7 +132,7 @@ class GSCUtils:
     stat_id_base_conv_table = [0,1,2,5,3,4]
     stat_id_iv_conv_table = [0,0,1,2,3,3]
     stat_id_exp_conv_table = [0,1,2,3,4,4]
-    patch_set_base_pos = [0x13, 0, 0]
+    patch_set_base_pos = [0x13, 0xC6, 0]
     patch_set_start_info_pos = [7, 0x11A, 0xFC]
     egg_value = 0x38
     min_level = 2
@@ -935,8 +935,8 @@ class GSCTradingData:
             if self.pokemon[i].mail is not None:
                 GSCUtilsMisc.copy_to_data(data[3], self.trading_pokemon_mail_pos + (i * self.trading_mail_length), self.pokemon[i].mail.values)
                 GSCUtilsMisc.copy_to_data(data[3], self.trading_pokemon_mail_sender_pos + (i * self.trading_mail_sender_length), self.pokemon[i].mail_sender.values, self.trading_mail_sender_length)
-        self.utils_class.create_patches_data(data[1], data[2])
-        self.utils_class.create_patches_data(data[3], data[3], is_mail=True)
+        self.utils_class.create_patches_data(data[1], data[2], self.utils_class)
+        self.utils_class.create_patches_data(data[3], data[3], self.utils_class, is_mail=True)
         return data
     
 class GSCChecks:
@@ -1299,10 +1299,12 @@ class GSCChecks:
     def check_patch_set(self, val, patch_sets):
         if self.curr_patch_set >= len(patch_sets):
             return self.no_conversion_patch
-        if val == self.end_of_patch
+        if val == self.end_of_patch:
             self.curr_patch_set += 1
             return val
-        return GSCUtilsMisc.check_normal_list(patch_sets[self.curr_patch_set], val)
+        if GSCUtilsMisc.check_normal_list(patch_sets[self.curr_patch_set], val):
+            return val
+        return self.no_conversion_patch
     
     @clean_check_sanity_checks
     def clean_pokemon_patch_set(self, val):
