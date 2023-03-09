@@ -151,6 +151,7 @@ class GSCTradingJP(GSCTrading):
         0x13B + (single_text_len * 11): [5, end_of_line]
     }, {}, {}, {}]
     special_sections_starter = [next_section, next_section, next_section, mail_next_section, mail_next_section]
+    special_sections_sync = [True, True, True, False, False]
     drop_bytes_checks = [[0xA, 0x1B9, 0xC5, 0x181, 0x11D], [next_section, next_section, mail_next_section, no_input, no_input], [0,4,0,0,0]]
     
     def __init__(self, sending_func, receiving_func, connection, menu, kill_function):

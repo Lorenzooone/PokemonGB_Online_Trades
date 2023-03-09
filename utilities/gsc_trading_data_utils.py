@@ -848,7 +848,17 @@ class GSCTradingData:
         self.pokemon[pos].set_species(evolution)
         self.party_info.set_id(pos, self.pokemon[pos].get_species())
         self.pokemon[pos].update_stats()
-        
+
+    @check_pos_validity
+    def requires_input(self, pos, special_mons_set):
+        """
+        Handles detemining if the mon requires special care
+        """
+        result = GSCUtilsMisc.default_if_none(self.evolve_mon(pos), False)
+        if not result:
+            result = self.is_special_mon(pos, special_mons_set)
+        return result
+
     @check_pos_validity
     def evolve_mon(self, pos):
         """
@@ -874,6 +884,21 @@ class GSCTradingData:
                     else:
                         return True
         return False
+        
+    @check_pos_validity
+    def is_special_mon(self, pos, special_mons_set):
+        """
+        Handles special pokémon which may learn new moves.
+        Returns True if it is a special mon.
+        Returns False if not.
+        """
+        return self.pokemon[pos].get_species() in special_mons_set
+    
+    def get_traded_mons(self, other):
+        """
+        Gets which pokémon were traded.
+        """
+        return [self.pokemon[self.get_last_mon_index()].get_species(), other.pokemon[other.get_last_mon_index()].get_species()]
     
     def trade_mon(self, other, own_index, other_index, checks):
         """

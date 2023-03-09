@@ -73,11 +73,17 @@ class RBYTrading(GSCTrading):
     Class which handles the trading process for the player.
     """
     
-    enter_room_states = [[0x01, 0x60, 0xD0, 0xD4], [{0x60, 0x61, 0x62, 0x63, 0x64, 0x65, 0x6F}, {0xD0, 0xD1, 0xD2, 0xD3, 0xD4}, {0xFE}, {0x60, 0x61, 0x62, 0x63, 0x64, 0x65, 0x6F}]]
+    enter_room_states = [[0x01, 0x01, 0x60, 0xD0, 0xD4], [{0x02}, {0x60, 0x61, 0x62, 0x63, 0x64, 0x65, 0x6F}, {0xD0, 0xD1, 0xD2, 0xD3, 0xD4}, {0xD0, 0xD1, 0xD2, 0xD3, 0xD4}, {0x60, 0x61, 0x62, 0x63, 0x64, 0x65, 0x6F}]]
     start_trading_states = [[0x60, 0x60], [{0x60, 0x61, 0x62, 0x63, 0x64, 0x65, 0x6F}, {0xFD}]]
     special_sections_len = [0xA, 0x1A2, 0xC5]
-    success_values = set(range(0x60, 0x70))
+    success_base_value = 0x60
+    success_values = set(range(success_base_value, success_base_value+0x10))
     possible_indexes = set(range(0x60, 0x70))
+    articuno_species = 74
+    zapdos_species = 75
+    moltres_species = 73
+    mew_species = 21
+    special_mons = set([moltres_species, zapdos_species, articuno_species])
     next_section = 0xFD
     no_input = 0xFE
     drop_bytes_checks = [[0xA, 0x19F, 0xC5], [next_section, next_section, no_input], [0,0,0]]
@@ -92,6 +98,12 @@ class RBYTrading(GSCTrading):
     def get_and_init_utils_class(self):
         RBYUtils()
         return RBYUtils
+    
+    def create_success_set(self, traded_mons):
+        """
+        Everything is valid...
+        """
+        return self.success_values
     
     def party_reader(self, data, data_mail=None, do_full=True):
         return RBYTradingData(data, data_mail=data_mail, do_full=do_full)

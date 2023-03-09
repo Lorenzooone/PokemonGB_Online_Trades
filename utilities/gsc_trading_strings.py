@@ -4,6 +4,7 @@ class GSCTradingStrings:
     Class which collects all the text used by the program
     and methods connected to that.
     """
+    version_str = "Version: 2.0.0"
     buffered_str = "Buffered"
     synchronous_str = "Synchronous"
     send_request = "S"
@@ -140,6 +141,9 @@ class GSCTradingStrings:
     def buffered_negotiation_print(buffered):
         print(GSCTradingStrings.buffered_negotiation_str.format(other_buffered=GSCTradingStrings.get_buffered_str(not buffered)))
         print(GSCTradingStrings.yes_no_str, end = '')
+    
+    def version_print():
+        print(GSCTradingStrings.version_str)
     
     def buffered_other_negotiation_print(buffered):
         print(GSCTradingStrings.buffered_other_negotiation_str.format(own_buffered = GSCTradingStrings.get_buffered_str(buffered)))

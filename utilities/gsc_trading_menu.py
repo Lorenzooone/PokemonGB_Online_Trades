@@ -90,6 +90,7 @@ class GSCTradingMenu:
                     ret_val = ret_val()
     
     def handle_menu(self):
+        GSCTradingStrings.version_print()
         if self.trade_type is None or ((self.trade_type != GSCTradingStrings.two_player_trade_str) and (self.trade_type != GSCTradingStrings.pool_trade_str)):
             self.handle_game_selector()
             ret_val = False
