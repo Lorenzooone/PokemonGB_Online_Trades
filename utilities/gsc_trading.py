@@ -383,7 +383,7 @@ class GSCTrading:
     sleep_timer = 0.02
     option_confirmation_threshold = 10
     resends_limit_trade = 100
-    enter_room_states = [[0x01, 0x01, 0x61, 0xD1, 0, 0xFE], [{0x02}, {0x61}, {0xD1}, {0}, {0xFE}, {0xFE}]]
+    enter_room_states = [[0x01, 0x61, 0xD1, 0, 0xFE], [{0x61}, {0xD1}, {0}, {0xFE}, {0xFE}]]
     start_trading_states = [[0x75, 0x75, 0x76], [{0x75}, {0}, {0xFD}]]
     success_base_value = 0x70
     success_values = set(range(success_base_value, success_base_value+0x10))
@@ -477,7 +477,7 @@ class GSCTrading:
                     if byte == self.drop_bytes_checks[1][section_index]:
                         return True
                     byte = self.swap_byte(self.no_data)
-                if byte != self.drop_bytes_checks[1][section_index]:
+                if (byte != 0) and (byte != self.drop_bytes_checks[1][section_index]):
                     return True
         return False
     

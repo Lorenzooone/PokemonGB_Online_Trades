@@ -288,6 +288,8 @@ class GSCUtils:
                 patch_sets_num -= 1
                 
         if j != 0:
+            if (start+i) >= len(patch_set):
+                i = len(patch_set)-start-1
             patch_set[start+i] = 0xFF
             i+=1
     
