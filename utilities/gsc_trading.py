@@ -21,6 +21,7 @@ class GSCTradingClient:
     success_transfer = "SUC2"
     buffered_transfer = "BUF2"
     negotiation_transfer = "NEG2"
+    need_data_transfer = "ASK2"
     possible_transfers = {
         full_transfer: {0x412, 0x40C}, # Sum of special_sections_len - Ver 1.0 and 2.0
         single_transfer: {7},
@@ -31,10 +32,13 @@ class GSCTradingClient:
         accept_transfer : {1 + 1}, # Counter + Accept
         success_transfer : {1 + 1}, # Counter + Success
         buffered_transfer : {1 + 1}, # Counter + Buffered or not
-        negotiation_transfer : {1 + 1} # Counter + Convergence value
+        negotiation_transfer : {1 + 1}, # Counter + Convergence value
+        need_data_transfer : {1 + 1} # Counter + Whether it needs the other player's data
     }
     buffered_value = 0x85
     not_buffered_value = 0x12
+    need_data_value = 0x72
+    not_need_data_value = 0x43
     pool_fail_value = 0x38
     success_value = 0x91
     max_message_id = 255
@@ -333,6 +337,28 @@ class GSCTradingClient:
             elif val == self.not_buffered_value:
                 buffered = False
         return buffered
+    
+    def send_need_data(self, needs_data):
+        """
+        Handles sending the client's need for new data.
+        """
+        val = self.not_need_data_value
+        if needs_data:
+            val = self.need_data_value
+        self.send_single_byte(self.need_data_transfer, val)
+    
+    def get_need_data(self):
+        """
+        Handles getting the other client's need for new data.
+        """
+        needs_data = None
+        val = self.get_single_byte(self.need_data_transfer)
+        if val is not None:
+            if val == self.need_data_value:
+                needs_data = True
+            elif val == self.not_need_data_value:
+                needs_data = False
+        return needs_data
     
     def send_negotiation_data(self):
         """
@@ -927,6 +953,11 @@ class GSCTrading:
                     # Check whether we need to restart entirely.
                     success_set = self.create_success_set(self.own_pokemon.get_traded_mons(self.other_pokemon))
                     success_list = list(success_set)
+                    
+                    # Check for new data needs
+                    if not to_server:
+                        self.comms.send_need_data(self.other_blank_trade)
+                        self.own_blank_trade = self.force_receive(self.comms.get_need_data)
                     self.check_reset_trade(to_server)
 
                     # Conclude the trade successfully
@@ -1085,6 +1116,7 @@ class GSCTrading:
             # Wait for the player to sit to the table
             if not self.sit_to_table():
                 break
+
             # If necessary, start a normal transfer
             if self.own_blank_trade and self.other_blank_trade:
                 buffered = self.force_receive(buf_neg.get_chosen_buffered)

@@ -18,6 +18,7 @@ class RBYTradingClient(GSCTradingClient):
     success_transfer = "SUC1"
     buffered_transfer = "BUF1"
     negotiation_transfer = "NEG1"
+    need_data_transfer = "ASK1"
     possible_transfers = {
         full_transfer: {0x271}, # Sum of special_sections_len
         single_transfer: {7},
@@ -27,7 +28,8 @@ class RBYTradingClient(GSCTradingClient):
         accept_transfer : {1 + 1}, # Counter + Accept
         success_transfer : {1 + 1}, # Counter + Success
         buffered_transfer : {1 + 1}, # Counter + Buffered or not
-        negotiation_transfer : {1 + 1} # Counter + Convergence value
+        negotiation_transfer : {1 + 1}, # Counter + Convergence value
+        need_data_transfer : {1 + 1} # Counter + Whether it needs the other player's data
     }
     
     def __init__(self, trader, connection, verbose, stop_trade, party_reader, base_no_trade = base_folder + "base.bin", base_pool = base_folder + "base_pool.bin"):
