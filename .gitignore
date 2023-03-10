@@ -133,6 +133,9 @@ usb.bin
 pool_mons1.bin
 pool_mons2.bin
 pool_mons3.bin
+!pool_default_data/pool_mons1.bin
+!pool_default_data/pool_mons2.bin
+!pool_default_data/pool_mons3.bin
 
 #HxD backup files
 *.bak
