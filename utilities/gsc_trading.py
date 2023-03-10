@@ -382,7 +382,7 @@ class GSCTrading:
     """
     sleep_timer = 0.02
     option_confirmation_threshold = 10
-    resends_limit_trade = 100
+    resends_limit_trade = 20
     enter_room_states = [[0x01, 0x61, 0xD1, 0, 0xFE], [{0x61}, {0xD1}, {0}, {0xFE}, {0xFE}]]
     start_trading_states = [[0x75, 0x75, 0x76], [{0x75}, {0}, {0xFD}]]
     success_base_value = 0x70
