@@ -6,6 +6,7 @@ import threading
 import signal
 import os
 import boto3
+import botocore
 from random import Random
 from time import sleep
 from utilities.high_level_listener import HighLevelListener
@@ -26,6 +27,7 @@ upload_after = 24
 
 class ServerUtils:
     saved_mons_path = "pool_mons"
+    default_path = "pool_default_data/"
     bin_eop = ".bin"
     
     def save_mons(gen):
@@ -51,8 +53,11 @@ class ServerUtils:
         """
         preparing_mons = []
         
-        s3.download_file(Bucket="pokemon-gb-online-pool-gen1", Key=ServerUtils.saved_mons_path + str(gen + 1) + ServerUtils.bin_eop, Filename="./" + ServerUtils.saved_mons_path + str(gen + 1) + ServerUtils.bin_eop)
-        raw_data = GSCUtilsMisc.read_data(ServerUtils.saved_mons_path + str(gen + 1) + ServerUtils.bin_eop)
+        try:
+            s3.download_file(Bucket="pokemon-gb-online-pool-gen1", Key=ServerUtils.saved_mons_path + str(gen + 1) + ServerUtils.bin_eop, Filename="./" + ServerUtils.saved_mons_path + str(gen + 1) + ServerUtils.bin_eop)
+            raw_data = GSCUtilsMisc.read_data(ServerUtils.saved_mons_path + str(gen + 1) + ServerUtils.bin_eop)
+        except botocore.exceptions.NoCredentialsError:
+            raw_data = GSCUtilsMisc.read_data(ServerUtils.default_path + ServerUtils.saved_mons_path + str(gen + 1) + ServerUtils.bin_eop)
         if raw_data is not None:
             single_entry_len = len(checks.single_pokemon_checks_map)
             if gen == 1:
@@ -97,7 +102,10 @@ class DataUploader(threading.Thread):
         uploader = None
         for gen in range(2):
             if self.to_up[gen]:
-                s3.upload_file(Bucket="pokemon-gb-online-pool-gen1", Key=ServerUtils.saved_mons_path + str(gen + 1) + ServerUtils.bin_eop, Filename="./" + ServerUtils.saved_mons_path + str(gen + 1) + ServerUtils.bin_eop)
+                try:
+                    s3.upload_file(Bucket="pokemon-gb-online-pool-gen1", Key=ServerUtils.saved_mons_path + str(gen + 1) + ServerUtils.bin_eop, Filename="./" + ServerUtils.saved_mons_path + str(gen + 1) + ServerUtils.bin_eop)
+                except botocore.exceptions.NoCredentialsError:
+                    pass
 
 class PoolTradeServer:
     """
@@ -403,8 +411,8 @@ class WebsocketServer (threading.Thread):
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         start_server = websockets.serve(WebsocketServer.handler, self.host, self.port)
-        asyncio.get_event_loop().run_until_complete(start_server)
-        asyncio.get_event_loop().run_forever()
+        loop.run_until_complete(start_server)
+        loop.run_forever()
 
 def exit_gracefully():
     os._exit(1)
