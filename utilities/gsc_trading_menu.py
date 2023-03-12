@@ -240,7 +240,7 @@ class GSCBufferedNegotiator(threading.Thread):
 
     def __init__(self, menu, comms, buffered, sleep_func):
         threading.Thread.__init__(self)
-        self.setDaemon(True)
+        self.daemon=True
         self.comms = comms
         self.menu = menu
         self.final_buffered = None

@@ -15,7 +15,7 @@ class ProxyConnectionRunner (threading.Thread):
     
     def __init__(self, menu, kill_function):
         threading.Thread.__init__(self)
-        self.setDaemon(True)
+        self.daemon=True
         self.room = menu.room
         self.gen = menu.gen
         self.hll = HighLevelListener()
@@ -33,7 +33,7 @@ class PoolTradeRunner (threading.Thread):
     
     def __init__(self, menu, kill_function):
         threading.Thread.__init__(self)
-        self.setDaemon(True)
+        self.daemon=True
         self.gen = menu.gen
         self.hll = HighLevelListener()
         self.kill_function = kill_function

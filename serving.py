@@ -93,7 +93,7 @@ class DataUploader(threading.Thread):
 
     def __init__(self):
         threading.Thread.__init__(self)
-        self.setDaemon(True)
+        self.daemon=True
         self.to_up = [False, False]
     
     def run(self):
@@ -301,7 +301,7 @@ class WebsocketServer (threading.Thread):
     
     def __init__(self, host="", port=11111):
         threading.Thread.__init__(self)
-        self.setDaemon(True)
+        self.daemon=True
         self.host = host
         try:
             self.port = int(os.environ["PORT"])

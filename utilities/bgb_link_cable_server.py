@@ -15,7 +15,7 @@ class BGBLinkCableSender(threading.Thread):
     SLEEP_TIMER = 0.01
     def __init__(self, server, connection):
         threading.Thread.__init__(self)
-        self.setDaemon(True)
+        self.daemon=True
         self._server = server
         self._connection = connection
     
@@ -40,7 +40,7 @@ class BGBLinkCableServer(threading.Thread):
 
     def __init__(self, data_handler, menu, kill_function, very_verbose=False):
         threading.Thread.__init__(self)
-        self.setDaemon(True)
+        self.daemon=True
         self._handlers = {
             1: self._handle_version,
             101: self._handle_joypad_update,
