@@ -190,7 +190,7 @@ class RSESPTradingPokémonInfo(GSCTradingPokémonInfo):
         self.version_info = [0, 0]
         self.ribbon_info = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
         if self.is_valid:
-            if not self.utils_class.is_species_valid(index, self.utils_class):
+            if not self.utils_class.is_species_valid(self.get_species(), self.utils_class):
                 self.is_valid = False
         if self.is_valid:
             if not self.has_valid_moves():

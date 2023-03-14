@@ -61,7 +61,7 @@ def sendByte_win(byte_to_send, num_bytes):
     p.write(byte_to_send.to_bytes(num_bytes, byteorder='big'))
 
 def receiveByte_win(num_bytes):
-    recv = int.from_bytes(p.read(size=1), byteorder='big')
+    recv = int.from_bytes(p.read(size=num_bytes), byteorder='big')
     return recv
 
 def kill_function():

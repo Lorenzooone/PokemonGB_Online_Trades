@@ -89,6 +89,15 @@ class RSESPTradingClient(GSCTradingClient):
         if ret is not None:
             ret = GSCUtilsMisc.from_n_bytes_le(ret, 3)
         return ret
+        
+    def get_big_trading_data(self):
+        """
+        Handles getting the other player's entire trading data.
+        If it's not ready, it loads a default party in order to get
+        the player's entire trading data and prepares the data for 
+        closing that trade.
+        """
+        return self.connection.recv_data(self.full_transfer)
 
     def get_accepted(self, num_accept):
         """
@@ -313,6 +322,7 @@ class RSESPTrading(GSCTrading):
         since_last_useful = self.since_last_useful_limit
         transfer_successful = False
         has_all_data = False
+        #self.sync_with_cable(self.not_done_control_flag|self.asking_data_nybble)
         
         while not transfer_successful:
             if (since_last_useful >= self.since_last_useful_limit) and not has_all_data:
@@ -390,6 +400,14 @@ class RSESPTrading(GSCTrading):
         Waits for an useful value.
         """
         return self.wait_for_set_of_values(next, set([self.accept_trade[num_accepted], self.decline_trade[num_accepted]]))
+    
+    def sync_with_cable(self, objective):
+        recv = 0
+        while recv != objective:
+            self.sendByte(0, 1)
+            recv = self.receiveByte(1)
+        self.sendByte(0, 3)
+        recv = self.receiveByte(3)
 
     def wait_for_success(self, next, num_success):
         """
@@ -500,6 +518,8 @@ class RSESPTrading(GSCTrading):
 
                 if not self.is_choice_decline(received_accepted, 1) and not self.is_choice_decline(accepted, 1):
 
+                    self.comms.reset_big_trading_data()
+                    self.reset_trade()
                     for i in range(7):
                         # Conclude the trade successfully
                         success_result = self.wait_for_success(0, i)
@@ -573,7 +593,7 @@ class RSESPTrading(GSCTrading):
         if send_data[0] is None:
             data_other = self.own_pokemon.create_trading_data(self.special_sections_len)
             data_other = self.force_receive(self.comms.get_big_trading_data)
-            data, data_other = self.read_section(data_other[0])
+            data, data_other = self.read_section(data_other)
 
         self.own_pokemon = self.party_reader(data)
         self.other_pokemon = self.party_reader(data_other)
