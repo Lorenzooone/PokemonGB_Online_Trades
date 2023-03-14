@@ -518,8 +518,6 @@ class RSESPTrading(GSCTrading):
 
                 if not self.is_choice_decline(received_accepted, 1) and not self.is_choice_decline(accepted, 1):
 
-                    self.comms.reset_big_trading_data()
-                    self.reset_trade()
                     for i in range(7):
                         # Conclude the trade successfully
                         success_result = self.wait_for_success(0, i)
@@ -534,6 +532,8 @@ class RSESPTrading(GSCTrading):
                     trade_completed = True
                     self.verbose_print(GSCTradingStrings.restart_trade_str)
                     self.exit_or_new = True
+                    self.comms.reset_big_trading_data()
+                    self.reset_trade()
                     if(self.has_failed(success_result) or self.has_failed(received_success)):
                         return True
             else:
