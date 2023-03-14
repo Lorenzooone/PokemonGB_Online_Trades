@@ -88,7 +88,8 @@ class GSCTradingStrings:
     game_selector_menu_str = ("\n=============== Game Selector ===============\n"
                           "1) Red/Blue/Yellow\n"
                           "2) Gold/Silver/Crystal\n"
-                          "3) Timecapsule in Gold/Silver/Crystal"
+                          "3) Timecapsule in Gold/Silver/Crystal\n"
+                          "4) Special Ruby/Sapphire/Emerald/Fire Red/Leaf Green"
                           )
     top_level_menu_str = ("\n=============== Top level Menu ===============\n"
                           "1) Start 2-Player trade (Default)\n"

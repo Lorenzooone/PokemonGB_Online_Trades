@@ -183,8 +183,8 @@ class RBYTradingData(GSCTradingData):
     def mon_generator_class(self):
         return RBYTradingPokémonInfo
     
-    def text_generator(self, data, pos):
-        return RBYTradingText(data, pos)
+    def text_generator(self, data, pos, length=trading_name_length):
+        return RBYTradingText(data, pos, length=length)
     
     def trainer_info_generator(self, data, pos):
         return None

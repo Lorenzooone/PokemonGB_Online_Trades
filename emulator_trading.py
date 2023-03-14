@@ -7,6 +7,7 @@ from time import sleep
 from utilities.gsc_trading import GSCTrading
 from utilities.gsc_trading_jp import GSCTradingJP
 from utilities.rby_trading import RBYTrading
+from utilities.rse_sp_trading import RSESPTrading
 from utilities.rby_trading_jp import RBYTradingJP
 from utilities.gsc_trading_menu import GSCTradingMenu
 from utilities.gsc_trading_strings import GSCTradingStrings
@@ -30,17 +31,21 @@ class PokeTrader:
         self.curr_recv = data
 
     # Code dependant on this connection method
-    def sendByte(self, byte_to_send):
-        self._server.to_send = byte_to_send
-        while self._server.to_send is not None:
-            sleep(self.SLEEP_TIMER)
+    def sendByte(self, byte_to_send, num_bytes):
+        for i in range(num_bytes):
+            self._server.to_send = byte_to_send & 0xFF
+            while self._server.to_send is not None:
+                sleep(self.SLEEP_TIMER)
+            byte_to_send = byte_to_send >> 8
         return
 
-    def receiveByte(self):
-        while self.curr_recv is None:
-            sleep(self.SLEEP_TIMER)
-        recv = self.curr_recv
-        self.curr_recv = None
+    def receiveByte(self, num_bytes):
+        recv = 0
+        for i in range(num_bytes):
+            while self.curr_recv is None:
+                sleep(self.SLEEP_TIMER)
+            recv |= self.curr_recv << (8*i)
+            self.curr_recv = None
         return recv
 
 def kill_function():
@@ -64,16 +69,19 @@ def transfer_func(p, menu):
             trade_c = GSCTradingJP(p.sendByte, p.receiveByte, p.connection, menu, kill_function)
         else:
             trade_c = GSCTrading(p.sendByte, p.receiveByte, p.connection, menu, kill_function)
+    elif menu.gen == 3:
+        trade_c = RSESPTrading(p.sendByte, p.receiveByte, p.connection, menu, kill_function)
     elif menu.gen == 1:
         if menu.japanese:
             trade_c = RBYTradingJP(p.sendByte, p.receiveByte, p.connection, menu, kill_function)
         else:
             trade_c = RBYTrading(p.sendByte, p.receiveByte, p.connection, menu, kill_function)
     
-    if menu.trade_type == GSCTradingStrings.two_player_trade_str:
-        trade_c.player_trade(menu.buffered)
-    elif menu.trade_type == GSCTradingStrings.pool_trade_str:
-        trade_c.pool_trade()
+    if menu.gen != 3:
+        if menu.trade_type == GSCTradingStrings.two_player_trade_str:
+            trade_c.player_trade(menu.buffered)
+        elif menu.trade_type == GSCTradingStrings.pool_trade_str:
+            trade_c.pool_trade()
 
 menu = GSCTradingMenu(kill_function, is_emulator=True)
 menu.handle_menu()

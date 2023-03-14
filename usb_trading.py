@@ -9,6 +9,7 @@ from utilities.gsc_trading import GSCTrading
 from utilities.gsc_trading_jp import GSCTradingJP
 from utilities.rby_trading import RBYTrading
 from utilities.rby_trading_jp import RBYTradingJP
+from utilities.rse_sp_trading import RSESPTrading
 from utilities.websocket_client import PoolTradeRunner, ProxyConnectionRunner
 from utilities.gsc_trading_menu import GSCTradingMenu
 from utilities.gsc_trading_strings import GSCTradingStrings
@@ -31,7 +32,9 @@ def transfer_func(sender, receiver):
         if menu.japanese:
             trade_c = GSCTradingJP(sender, receiver, connection, menu, kill_function)
         else:
-            trade_c = GSCTrading(sender, receiver, connection, menu, kill_function)
+            trade_c = GSCTrading(sender, receiver, connection, menu, kill_function)  
+    elif menu.gen == 3:
+        trade_c = RSESPTrading(sender, receiver, connection, menu, kill_function)
     elif menu.gen == 1:
         if menu.japanese:
             trade_c = RBYTradingJP(sender, receiver, connection, menu, kill_function)
@@ -45,19 +48,19 @@ def transfer_func(sender, receiver):
         trade_c.pool_trade()
 
 # Code dependant on this connection method
-def sendByte(byte_to_send):
-    epOut.write(byte_to_send.to_bytes(1, byteorder='big'))
+def sendByte(byte_to_send, num_bytes):
+    epOut.write(byte_to_send.to_bytes(num_bytes, byteorder='big'))
     return
 
-def receiveByte():
+def receiveByte(num_bytes):
     recv = int.from_bytes(epIn.read(epIn.wMaxPacketSize, 100), byteorder='big')
     return recv
 
 # Code dependant on this connection method
-def sendByte_win(byte_to_send):
-    p.write(byte_to_send.to_bytes(1, byteorder='big'))
+def sendByte_win(byte_to_send, num_bytes):
+    p.write(byte_to_send.to_bytes(num_bytes, byteorder='big'))
 
-def receiveByte_win():
+def receiveByte_win(num_bytes):
     recv = int.from_bytes(p.read(size=1), byteorder='big')
     return recv
 
@@ -93,15 +96,15 @@ try:
     receiver = receiveByte
 
     if dev is None:
-        from winusbcdc import ComPort
-        print("Trying WinUSB CDC")
-        p = ComPort(vid=0xcafe, pid=0x4011)
-        if not p.is_open:
-            exit_gracefully()
-        #p.baudrate = 115200
-        sender = sendByte_win
-        receiver = receiveByte_win
-    
+        if(os.name == "nt"):
+            from winusbcdc import ComPort
+            print("Trying WinUSB CDC")
+            p = ComPort(vid=0xcafe, pid=0x4011)
+            if not p.is_open:
+                exit_gracefully()
+            #p.baudrate = 115200
+            sender = sendByte_win
+            receiver = receiveByte_win    
     else:
         reattach = False
         if(os.name != "nt"):

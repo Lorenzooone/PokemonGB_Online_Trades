@@ -366,13 +366,41 @@ class GSCUtilsMisc:
     def read_nybbles(val):
         return [(val&0xF0) >> 4, val & 0xF]
     
+    def read_short_le(data, pos):
+        return ((data[pos]) + (data[pos+1]<<8))
+    
+    def read_int_le(data, pos):
+        return (data[pos]) + (data[pos+1]<<8) + (data[pos+2]<<16) + (data[pos+3]<<24)
+    
     def read_short(data, pos):
         return ((data[pos] << 8) + (data[pos+1]))
     
     def write_short(data, pos, short_data):
         data[pos] = (short_data >> 8) & 0xFF
         data[pos+1] = short_data & 0xFF
-        
+    
+    def write_int_le(data, pos, int_data):
+        data[pos] = int_data & 0xFF
+        data[pos+1] = (int_data >> 8) & 0xFF
+        data[pos+2] = (int_data >> 16) & 0xFF
+        data[pos+3] = (int_data >> 24) & 0xFF
+    
+    def write_short_le(data, pos, short_data):
+        data[pos] = short_data & 0xFF
+        data[pos+1] = (short_data >> 8) & 0xFF
+    
+    def to_n_bytes_le(in_data, n_bytes):
+        data = [0] * n_bytes
+        for i in range(n_bytes):
+            data[i] = (in_data>>(8*i)) & 0xFF
+        return data
+
+    def from_n_bytes_le(data, n_bytes):
+        out_data = 0
+        for i in range(n_bytes):
+            out_data |= data[i]<<(8*i)
+        return out_data
+
     def inc_byte(val):
         val += 1
         if val >= 256:
@@ -630,11 +658,11 @@ class GSCTradingPokémonInfo:
 
     def heal(self):
         GSCUtilsMisc.write_short(self.values, self.curr_hp_pos, self.get_max_hp())
-        self.status_pos = 0
+        self.values[self.status_pos] = 0
 
     def faint(self):
         GSCUtilsMisc.write_short(self.values, self.curr_hp_pos, 0)
-        self.status_pos = 0
+        self.values[self.status_pos] = 0
     
     def get_max_hp(self):
         return GSCUtilsMisc.read_short(self.values, self.stats_pos)
@@ -767,7 +795,7 @@ class GSCTradingData:
     
     def __init__(self, data_pokemon, data_mail=None, do_full=True):
         self.utils_class = self.get_utils_class()
-        self.trader = self.text_generator(data_pokemon, self.trader_name_pos)
+        self.trader = self.text_generator(data_pokemon, self.trader_name_pos, length=self.trading_name_length)
         self.party_info = self.party_generator(data_pokemon, self.trading_party_info_pos)
         self.trader_info = self.trainer_info_generator(data_pokemon, self.trader_info_pos)
         self.pokemon = []
@@ -786,8 +814,8 @@ class GSCTradingData:
     def mon_generator_class(self):
         return GSCTradingPokémonInfo
     
-    def text_generator(self, data, pos):
-        return GSCTradingText(data, pos)
+    def text_generator(self, data, pos, length=trading_name_length):
+        return GSCTradingText(data, pos, length=length)
     
     def party_generator(self, data, pos):
         return GSCTradingPartyInfo(data, pos)

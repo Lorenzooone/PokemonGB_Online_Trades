@@ -35,7 +35,8 @@ class GSCTradingMenu:
         self.toppest_menu_handlers = {
             "1": self.start_gen1_trading,
             "2": self.start_gen2_trading,
-            "3": self.start_gen1_trading
+            "3": self.start_gen1_trading,
+            "4": self.start_gen3_trading
             }
         self.top_menu_handlers = {
             "0": self.start_2p_trading,
@@ -80,7 +81,7 @@ class GSCTradingMenu:
         return buffered
     
     def handle_game_selector(self):
-        if self.gen is None or ((self.gen != 1) and (self.gen != 2)):
+        if self.gen is None or ((self.gen != 1) and (self.gen != 2) and (self.gen != 3)):
             ret_val = None
             while ret_val is None:
                 GSCTradingStrings.game_selector_menu_print()
@@ -126,6 +127,10 @@ class GSCTradingMenu:
     
     def start_gen2_trading(self):
         self.gen = 2
+        return True
+    
+    def start_gen3_trading(self):
+        self.gen = 3
         return True
     
     def handle_options(self):
@@ -196,7 +201,7 @@ class GSCTradingMenu:
         # Parse program's arguments
         parser = ArgumentParser()
         parser.add_argument("-g", "--generation", dest="gen_number", default = None,
-                            help="generation (1 = RBY/Timecapsule, 2 = GSC)", type=int)
+                            help="generation (1 = RBY/Timecapsule, 2 = GSC, 4 = RSE Special)", type=int)
         parser.add_argument("-t", "--trade_type", dest="trade_type", default = None,
                             help="trade type (" + GSCTradingStrings.two_player_trade_str + " = 2-Player Trade, " + GSCTradingStrings.pool_trade_str + " = Pool Trade)")
         parser.add_argument("-r", "--room", dest="room", default = None,

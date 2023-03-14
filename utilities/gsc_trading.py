@@ -383,6 +383,7 @@ class GSCTrading:
     sleep_timer = 0.02
     option_confirmation_threshold = 10
     resends_limit_trade = 20
+    num_bytes_per_transfer = 1
     enter_room_states = [[0x01, 0x61, 0xD1, 0, 0xFE], [{0x61}, {0xD1}, {0}, {0xFE}, {0xFE}]]
     start_trading_states = [[0x75, 0x75, 0x76], [{0x75}, {0}, {0xFD}]]
     success_base_value = 0x70
@@ -664,8 +665,8 @@ class GSCTrading:
         It's a high level abstraction which emulates how real hardware works.
         """
         self.sleep_func()
-        self.sendByte(send_data)
-        recv = self.receiveByte()
+        self.sendByte(send_data, self.num_bytes_per_transfer)
+        recv = self.receiveByte(self.num_bytes_per_transfer)
         if self.extremely_verbose:
             print(GSCTradingStrings.byte_transfer_str.format(send_data=send_data, recv=recv))
         return recv
