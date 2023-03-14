@@ -414,7 +414,7 @@ class GSCTrading:
     decline_trade = 0x71
     accept_trade = 0x72
     
-    def __init__(self, sending_func, receiving_func, connection, menu, kill_function):
+    def __init__(self, sending_func, receiving_func, connection, menu, kill_function, pre_sleep):
         self.sendByte = sending_func
         self.receiveByte = receiving_func
         self.checks = self.get_checks(menu)
@@ -423,6 +423,7 @@ class GSCTrading:
         self.kill_function = kill_function
         self.extremely_verbose = False
         self.utils_class = self.get_and_init_utils_class()
+        self.pre_sleep = pre_sleep
     
     def get_and_init_utils_class(self):
         GSCUtils()
@@ -664,7 +665,8 @@ class GSCTrading:
         Swaps a byte with the device. First send, and then receives.
         It's a high level abstraction which emulates how real hardware works.
         """
-        self.sleep_func()
+        if not self.pre_sleep:
+            self.sleep_func()
         self.sendByte(send_data, self.num_bytes_per_transfer)
         recv = self.receiveByte(self.num_bytes_per_transfer)
         if self.extremely_verbose:

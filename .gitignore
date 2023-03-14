@@ -140,5 +140,7 @@ pool_mons3.bin
 #HxD backup files
 *.bak
 
+*.gba
+
 Procfile
 requirements.txt

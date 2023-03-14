@@ -24,6 +24,7 @@ class GSCTradingMenu:
         self.max_level = args.max_level
         self.egg = args.egg
         self.is_emulator = is_emulator
+        self.multiboot = False
         if is_emulator:
             self.emulator = [args.emulator_host, args.emulator_port]
         self.do_sanity_checks = args.do_sanity_checks
@@ -36,7 +37,8 @@ class GSCTradingMenu:
             "1": self.start_gen1_trading,
             "2": self.start_gen2_trading,
             "3": self.start_gen1_trading,
-            "4": self.start_gen3_trading
+            "4": self.start_gen3_trading,
+            "m": self.start_multiboot_gen3
             }
         self.top_menu_handlers = {
             "0": self.start_2p_trading,
@@ -92,13 +94,16 @@ class GSCTradingMenu:
     
     def handle_menu(self):
         GSCTradingStrings.version_print()
-        if self.trade_type is None or ((self.trade_type != GSCTradingStrings.two_player_trade_str) and (self.trade_type != GSCTradingStrings.pool_trade_str)):
+        if self.multiboot:
+            self.start_pool_trading()
+        elif self.trade_type is None or ((self.trade_type != GSCTradingStrings.two_player_trade_str) and (self.trade_type != GSCTradingStrings.pool_trade_str)):
             self.handle_game_selector()
-            ret_val = False
-            while not ret_val:
-                GSCTradingStrings.top_menu_print()
-                GSCTradingStrings.choice_print()
-                ret_val = self.top_menu_handlers.get(input(), self.top_menu_handlers["0"])()
+            if not self.multiboot:
+                ret_val = False
+                while not ret_val:
+                    GSCTradingStrings.top_menu_print()
+                    GSCTradingStrings.choice_print()
+                    ret_val = self.top_menu_handlers.get(input(), self.top_menu_handlers["0"])()
         else:
             if self.trade_type == GSCTradingStrings.two_player_trade_str:
                 self.start_2p_trading()
@@ -131,6 +136,11 @@ class GSCTradingMenu:
     
     def start_gen3_trading(self):
         self.gen = 3
+        return True
+    
+    def start_multiboot_gen3(self):
+        self.gen = 3
+        self.multiboot = True
         return True
     
     def handle_options(self):
@@ -201,7 +211,7 @@ class GSCTradingMenu:
         # Parse program's arguments
         parser = ArgumentParser()
         parser.add_argument("-g", "--generation", dest="gen_number", default = None,
-                            help="generation (1 = RBY/Timecapsule, 2 = GSC, 4 = RSE Special)", type=int)
+                            help="generation (1 = RBY/Timecapsule, 2 = GSC, 3 = RSE Special)", type=int)
         parser.add_argument("-t", "--trade_type", dest="trade_type", default = None,
                             help="trade type (" + GSCTradingStrings.two_player_trade_str + " = 2-Player Trade, " + GSCTradingStrings.pool_trade_str + " = Pool Trade)")
         parser.add_argument("-r", "--room", dest="room", default = None,

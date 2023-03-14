@@ -271,9 +271,14 @@ class PoolTradeServer:
                 self.last_success = self.received_success[0]
                 self.own_id = GSCUtilsMisc.inc_byte(self.own_id)
                 self.clear_pool = True
+                if not self.mon_index in in_use_mons[self.gen]:
+                    in_use_mons[self.gen].add(self.mon_index)
                 mons[self.gen][self.mon_index] = self.received_mon[1]
                 ServerUtils.save_mons(self.gen)
-                in_use_mons[self.gen].remove(self.mon_index)
+                try:
+                    in_use_mons[self.gen].remove(self.mon_index)
+                except:
+                    pass
             return self.hll.prepare_send_data(self.trading_client_class.success_transfer, [self.own_id] + [PoolTradeServer.success_value[self.gen]])
         return None
     
@@ -385,9 +390,14 @@ class PoolTradeServer:
             if success:
                 if index == (self.num_successes[self.gen]-1):
                     self.clear_pool = True
+                    if not self.mon_index in in_use_mons[self.gen]:
+                        in_use_mons[self.gen].add(self.mon_index)
                     mons[self.gen][self.mon_index] = self.received_mon[1]
                     ServerUtils.save_mons(self.gen)
-                    in_use_mons[self.gen].remove(self.mon_index)
+                    try:
+                        in_use_mons[self.gen].remove(self.mon_index)
+                    except:
+                        pass
                 return self.hll.prepare_send_data(self.trading_client_class.success_transfer[index], [self.own_id] + GSCUtilsMisc.to_n_bytes_le(PoolTradeServer.success_value[self.gen][index] | self.expected_gen3_success_value(index, self.mon[0], self.received_mon[1][0]), 3))
             else:
                 self.can_continue = False

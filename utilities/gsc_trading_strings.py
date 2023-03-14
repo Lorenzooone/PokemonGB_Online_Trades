@@ -89,7 +89,8 @@ class GSCTradingStrings:
                           "1) Red/Blue/Yellow\n"
                           "2) Gold/Silver/Crystal\n"
                           "3) Timecapsule in Gold/Silver/Crystal\n"
-                          "4) Special Ruby/Sapphire/Emerald/Fire Red/Leaf Green"
+                          "4) Special Ruby/Sapphire/Emerald/Fire Red/Leaf Green\n"
+                          "m) Multiboot Special Ruby/Sapphire/Emerald/Fire Red/Leaf Green"
                           )
     top_level_menu_str = ("\n=============== Top level Menu ===============\n"
                           "1) Start 2-Player trade (Default)\n"

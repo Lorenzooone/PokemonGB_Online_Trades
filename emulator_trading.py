@@ -66,16 +66,16 @@ def transfer_func(p, menu):
     
     if menu.gen == 2:
         if menu.japanese:
-            trade_c = GSCTradingJP(p.sendByte, p.receiveByte, p.connection, menu, kill_function)
+            trade_c = GSCTradingJP(p.sendByte, p.receiveByte, p.connection, menu, kill_function, True)
         else:
-            trade_c = GSCTrading(p.sendByte, p.receiveByte, p.connection, menu, kill_function)
+            trade_c = GSCTrading(p.sendByte, p.receiveByte, p.connection, menu, kill_function, True)
     elif menu.gen == 3:
-        trade_c = RSESPTrading(p.sendByte, p.receiveByte, p.connection, menu, kill_function)
+        trade_c = RSESPTrading(p.sendByte, p.receiveByte, p.connection, menu, kill_function, True)
     elif menu.gen == 1:
         if menu.japanese:
-            trade_c = RBYTradingJP(p.sendByte, p.receiveByte, p.connection, menu, kill_function)
+            trade_c = RBYTradingJP(p.sendByte, p.receiveByte, p.connection, menu, kill_function, True)
         else:
-            trade_c = RBYTrading(p.sendByte, p.receiveByte, p.connection, menu, kill_function)
+            trade_c = RBYTrading(p.sendByte, p.receiveByte, p.connection, menu, kill_function, True)
     
     if menu.gen != 3:
         if menu.trade_type == GSCTradingStrings.two_player_trade_str:

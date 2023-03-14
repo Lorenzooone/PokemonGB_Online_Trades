@@ -94,8 +94,8 @@ class RBYTrading(GSCTrading):
     decline_trade = 0x61
     accept_trade = 0x62
     
-    def __init__(self, sending_func, receiving_func, connection, menu, kill_function):
-        super(RBYTrading, self).__init__(sending_func, receiving_func, connection, menu, kill_function)
+    def __init__(self, sending_func, receiving_func, connection, menu, kill_function, pre_sleep):
+        super(RBYTrading, self).__init__(sending_func, receiving_func, connection, menu, kill_function, pre_sleep)
         
     def get_and_init_utils_class(self):
         RBYUtils()

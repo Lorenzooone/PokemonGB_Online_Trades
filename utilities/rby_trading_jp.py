@@ -22,6 +22,6 @@ class RBYTradingJP(RBYTrading):
         0x121 + (single_text_len * 11): [5, end_of_line]
     }, {}]
     
-    def __init__(self, sending_func, receiving_func, connection, menu, kill_function):
-        super(RBYTradingJP, self).__init__(sending_func, receiving_func, connection, menu, kill_function)
+    def __init__(self, sending_func, receiving_func, connection, menu, kill_function, pre_sleep):
+        super(RBYTradingJP, self).__init__(sending_func, receiving_func, connection, menu, kill_function, pre_sleep)
             

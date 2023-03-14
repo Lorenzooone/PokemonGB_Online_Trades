@@ -163,8 +163,8 @@ class RSESPTrading(GSCTrading):
     decline_trade_value = [decline_trade[0]<<16, decline_trade[1]<<16]
     no_input = 0
     
-    def __init__(self, sending_func, receiving_func, connection, menu, kill_function):
-        super(RSESPTrading, self).__init__(sending_func, receiving_func, connection, menu, kill_function)
+    def __init__(self, sending_func, receiving_func, connection, menu, kill_function, pre_sleep):
+        super(RSESPTrading, self).__init__(sending_func, receiving_func, connection, menu, kill_function, pre_sleep)
         
     def get_and_init_utils_class(self):
         RSESPUtils()

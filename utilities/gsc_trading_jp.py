@@ -154,8 +154,8 @@ class GSCTradingJP(GSCTrading):
     special_sections_sync = [True, True, True, False, False]
     drop_bytes_checks = [[0xA, 0x1B9, 0xC5, 0x181, 0x11D], [next_section, next_section, mail_next_section, no_input, no_input], [0,4,0,0,0]]
     
-    def __init__(self, sending_func, receiving_func, connection, menu, kill_function):
-        super(GSCTradingJP, self).__init__(sending_func, receiving_func, connection, menu, kill_function)
+    def __init__(self, sending_func, receiving_func, connection, menu, kill_function, pre_sleep):
+        super(GSCTradingJP, self).__init__(sending_func, receiving_func, connection, menu, kill_function, pre_sleep)
         self.jp_mail_converter = GSCJPMailConverter(self.checks)
 
     def get_mail_section_id(self):
