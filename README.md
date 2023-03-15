@@ -41,3 +41,8 @@ If the adapter is inserted, it should be detected.
 Run `python ./emulator_trading.py`.
 Once you're out of the program's menu, and you have started BGB, you can then left click on the actively running BGB window, and click Link->Connect->Ok.
 It should connect to the emulator, once that is done.
+
+## Trading using Gen3 games
+The software currently makes use of the [Pokemon-Gen3-to-GenX](https://github.com/Lorenzooone/Pokemon-Gen3-to-Gen-X) project to add support to trading using Pokémon Ruby/Sapphire/Emerald/Fire Red/Leaf Green.
+
+As such, you must first multiboot into it using the "m" option. Then, you can select the Gen 3 option to trade.
