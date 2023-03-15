@@ -48,4 +48,4 @@ The software currently makes use of the [Pokemon-Gen3-to-GenX](https://github.co
 As such, you must first multiboot into it using the "m" option. Then, you can select the Gen 3 option to trade.
 
 If you're using the GB Link Cable to USB Adapter, updating to a reconfigurable firmware is EXTREMELY suggested for trading using Gen 3 games.
-[One is available here](https://github.com/Lorenzooone/gb-link-firmware-reconfigurable).
+[One is available here](https://github.com/Lorenzooone/gb-link-firmware-reconfigurable/releases).
