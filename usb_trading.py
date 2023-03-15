@@ -17,7 +17,7 @@ from utilities.gsc_trading_strings import GSCTradingStrings
 
 dev = None
 
-path = "gen3_to_genx_mb.gba"
+path = "pokemon_gen3_to_genx_mb.gba"
 
 def transfer_func(sender, receiver, list_sender, raw_receiver):
     menu = GSCTradingMenu(kill_function)
