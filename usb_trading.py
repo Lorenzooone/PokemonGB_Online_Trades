@@ -37,7 +37,7 @@ def transfer_func(sender, receiver, list_sender, raw_receiver):
     if menu.gen == 3:
         config_base = multiboot.get_configure_list(1000, 4)
     else:
-        config_base = multiboot.get_configure_list(20000, 1)
+        config_base = multiboot.get_configure_list(1000, 1)
 
     multiboot.read_all(raw_receiver)
     list_sender(config_base, chunk_size=len(config_base))
@@ -47,7 +47,7 @@ def transfer_func(sender, receiver, list_sender, raw_receiver):
         print("Non-reconfigurable firmware found!\nIt's best if you update to the one available at:\nhttps://github.com/Lorenzooone/gb-link-firmware-reconfigurable/releases")
     
     pre_sleep = False
-    if ret == 1:
+    if(ret == 1) and (menu.gen == 3):
         pre_sleep = True
 
     if menu.multiboot:
