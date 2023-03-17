@@ -85,9 +85,9 @@ class GSCUtilsLoaders:
                     ret[data[i]] = (True, data[i + data_len], data[i + (2*data_len)])
         return ret
 
-    def prepare_stats(data, num_stats):
-        ret = [0] * 0x100
-        for i in range(0x100):
+    def prepare_stats(data, num_stats, num_entries):
+        ret = [0] * num_entries
+        for i in range(num_entries):
             ret[i] = data[(i)*num_stats:(i+1)*num_stats]
         return ret
 
@@ -127,6 +127,7 @@ class GSCUtils:
     everstone_id = 0x70
     egg_id = 0xFD
     end_of_line = 0x50
+    num_entries = 0x100
     name_size = 0xB
     hp_stat_id = 0
     stat_id_base_conv_table = [0,1,2,5,3,4]
@@ -155,7 +156,7 @@ class GSCUtils:
         curr_class.evolution_ids = GSCUtilsLoaders.prepare_evolution_check_list(GSCUtilsMisc.read_data(self.get_path(curr_class.evolution_ids_path)))
         curr_class.mail_ids = GSCUtilsLoaders.prepare_check_list(GSCUtilsMisc.read_data(self.get_path(curr_class.mail_ids_path)))
         curr_class.no_mail_section = GSCUtilsMisc.read_data(self.get_path(curr_class.no_mail_path))
-        curr_class.base_stats = GSCUtilsLoaders.prepare_stats(GSCUtilsMisc.read_data(self.get_path(curr_class.base_stats_path)), curr_class.num_stats)
+        curr_class.base_stats = GSCUtilsLoaders.prepare_stats(GSCUtilsMisc.read_data(self.get_path(curr_class.base_stats_path)), curr_class.num_stats, curr_class.num_entries)
         curr_class.pokemon_names = GSCUtilsLoaders.text_to_bytes(self.get_path(curr_class.pokemon_names_path), self.get_path(curr_class.text_conv_path))
         curr_class.moves_pp_list = GSCUtilsMisc.read_data(self.get_path(curr_class.moves_pp_list_path))
         curr_class.learnsets = GSCUtilsLoaders.prepare_learnsets(GSCUtilsMisc.read_data(self.get_path(curr_class.learnset_evos_path)))

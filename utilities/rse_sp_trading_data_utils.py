@@ -1,3 +1,4 @@
+import math
 from .gsc_trading_data_utils import GSCUtils, GSCTradingText, GSCTradingPokémonInfo, GSCTradingPartyInfo, GSCTradingData, GSCChecks, GSCUtilsMisc
 
 class RSESPUtils(GSCUtils):
@@ -13,6 +14,7 @@ class RSESPUtils(GSCUtils):
     invalid_held_items = None
     invalid_pokemon = None
     abilities = None
+    num_entries = 0x1BD
     last_valid_pokemon = 411
     last_valid_item = 376
     last_valid_move = 354
@@ -165,7 +167,7 @@ class RSESPTradingPokémonInfo(GSCTradingPokémonInfo):
     
     all_lengths = [pokemon_data_len, mail_len, version_info_len, ribbon_info_len]
     
-    def __init__(self, data, start, length=pokemon_data_len):
+    def __init__(self, data, start, length=pokemon_data_len, is_encrypted=True):
         super(RSESPTradingPokémonInfo, self).__init__(data, start, length=length)
         self.pid = GSCUtilsMisc.read_int_le(self.values, self.pid_pos)
         self.ot_id = GSCUtilsMisc.read_int_le(self.values, self.ot_id_pos)
@@ -173,6 +175,21 @@ class RSESPTradingPokémonInfo(GSCTradingPokémonInfo):
         decrypted_data = []
         enc_positions = self.utils_class.enc_positions
         enc_data_len = self.enc_data_len
+        checksum = 0
+        self.checksum_failed = False
+        if not is_encrypted:
+            for i in range(int(enc_data_len/4)):
+                single_entry_dec = GSCUtilsMisc.read_int_le(self.values, self.enc_data_pos+(i*4))
+                checksum = (checksum + single_entry_dec) & 0xFFFF
+                checksum = (checksum + (single_entry_dec>>16)) & 0xFFFF
+            if checksum != GSCUtilsMisc.read_short_le(self.values, self.checksum_pos):
+                self.is_valid = False
+                self.checksum_failed = True
+            self.growth = self.values[self.enc_data_pos + (int(enc_data_len/4)*0):self.enc_data_pos + (int(enc_data_len/4)*1)]
+            self.attacks = self.values[self.enc_data_pos + (int(enc_data_len/4)*1):self.enc_data_pos + (int(enc_data_len/4)*2)]
+            self.evs = self.values[self.enc_data_pos + (int(enc_data_len/4)*2):self.enc_data_pos + (int(enc_data_len/4)*3)]
+            self.misc = self.values[self.enc_data_pos + (int(enc_data_len/4)*3):self.enc_data_pos + (int(enc_data_len/4)*4)]
+            self.encrypt_data()
         checksum = 0
         for i in range(int(enc_data_len/4)):
             single_entry_dec = GSCUtilsMisc.read_int_le(self.values, self.enc_data_pos+(i*4))^self.pid^self.ot_id
@@ -182,6 +199,7 @@ class RSESPTradingPokémonInfo(GSCTradingPokémonInfo):
             checksum = (checksum + (single_entry_dec>>16)) & 0xFFFF
         if checksum != GSCUtilsMisc.read_short_le(self.values, self.checksum_pos):
             self.is_valid = False
+            self.checksum_failed = True
         index = self.pid % len(enc_positions)
         self.growth = decrypted_data[int(enc_data_len/4)*((enc_positions[index]>>0)&3):int(enc_data_len/4)*(((enc_positions[index]>>0)&3)+1)]
         self.attacks = decrypted_data[int(enc_data_len/4)*((enc_positions[index]>>2)&3):int(enc_data_len/4)*(((enc_positions[index]>>2)&3)+1)]
@@ -241,6 +259,37 @@ class RSESPTradingPokémonInfo(GSCTradingPokémonInfo):
         if (self.misc[7] & 0x40) != 0:
             return 1
         return 0
+
+    def encrypt_data(self):
+        enc_positions = self.utils_class.enc_positions
+        enc_data_len = self.enc_data_len
+        index = self.pid % len(enc_positions)
+        decrypted_data = []
+        encrypted_data = []
+        for i in range(4):
+            for j in range(4):
+                value = (enc_positions[index]>>(2*j))&3
+                if value == i:
+                    if j == 0:
+                        decrypted_data += self.growth
+                    elif j == 1:
+                        decrypted_data += self.attacks
+                    elif j == 2:
+                        decrypted_data += self.evs
+                    elif j == 3:
+                        decrypted_data += self.misc
+        checksum = 0
+        for i in range(int(enc_data_len/4)):
+            single_entry_dec = GSCUtilsMisc.read_int_le(decrypted_data, i*4)
+            checksum = (checksum + single_entry_dec) & 0xFFFF
+            checksum = (checksum + (single_entry_dec>>16)) & 0xFFFF
+            single_entry_dec ^= self.pid^self.ot_id
+            for j in range(4):
+                encrypted_data += [(single_entry_dec>>(8*j)) & 0xFF]
+        if self.checksum_failed:
+            checksum += 1
+        self.values[self.enc_data_pos:self.enc_data_pos + (int(enc_data_len/4)*4)] = encrypted_data
+        GSCUtilsMisc.write_short_le(self.values, self.checksum_pos, checksum)
     
     def get_has_second_ability(self):
         if (self.misc[7] & 0x80) != 0:
@@ -361,7 +410,7 @@ class RSESPTradingPokémonInfo(GSCTradingPokémonInfo):
     def set_exp(self, val):
         GSCUtilsMisc.write_int_le(self.growth, 4, val)
     
-    def get_exp(self, val):
+    def get_exp(self):
         return GSCUtilsMisc.read_int_le(self.growth, 4)
     
     def update_stats(self):
@@ -440,11 +489,11 @@ class RSESPTradingPokémonInfo(GSCTradingPokémonInfo):
             GSCUtilsMisc.copy_to_data(data, self._precalced_lengths[len(sources)+1], self.ribbon_info)
         return data
 
-    def set_data(data):
+    def set_data(data, is_encrypted=True):
         """
         Creates an entry from the given data.
         """
-        mon = RSESPTradingPokémonInfo(data, 0)
+        mon = RSESPTradingPokémonInfo(data, 0, is_encrypted=is_encrypted)
         mon.add_mail(data, mon._precalced_lengths[1])
         mon.add_version_info(data, mon._precalced_lengths[2])
         mon.add_ribbon_info(data, mon._precalced_lengths[3])
