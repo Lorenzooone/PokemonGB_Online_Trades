@@ -211,7 +211,7 @@ class GSCUtils:
     def stat_calculation(stat_id, species, ivs, stat_exp, level, utils_class, do_exp=True):
         inter_value = (utils_class.get_base_stat(species, stat_id, utils_class) + utils_class.get_iv(ivs, stat_id, utils_class)) * 2
         if do_exp:
-            inter_value += math.floor(math.ceil(math.sqrt(utils_class.get_exp(stat_exp, stat_id, utils_class))/4))
+            inter_value += math.floor(math.ceil(math.sqrt(utils_class.get_exp(stat_exp, stat_id, utils_class)))/4)
         inter_value = math.floor((inter_value*level)/100)
         return inter_value + utils_class.final_stat_calc_step(stat_id, level, utils_class)
     
