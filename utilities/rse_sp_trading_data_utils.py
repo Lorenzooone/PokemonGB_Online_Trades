@@ -44,11 +44,14 @@ class RSESPUtils(GSCUtils):
     
     def get_exp(stat_exp, stat_id, utils_class):
         return stat_exp[utils_class.stat_id_base_conv_table[stat_id]]
+
+    def get_stat_exp_contribution(stat_exp):
+        return math.floor(stat_exp / 4)
     
     def stat_calculation(stat_id, species, ivs, stat_exp, level, utils_class, nature=0, do_exp=True):
         inter_value = ((2 * utils_class.get_base_stat(species, stat_id, utils_class)) + utils_class.get_iv(ivs, stat_id, utils_class))
         if do_exp:
-            inter_value += math.floor(utils_class.get_exp(stat_exp, stat_id, utils_class)/4)
+            inter_value += utils_class.get_stat_exp_contribution(utils_class.get_exp(stat_exp, stat_id, utils_class))
         inter_value = math.floor((inter_value*level)/100)
         
         stat_boosted = int(nature / 5) + 1
