@@ -103,11 +103,11 @@ def sendByte_win(byte_to_send, num_bytes):
 def sendList_win(data, chunk_size=8):
     num_iters = int(len(data)/chunk_size)
     for i in range(num_iters):
-        p.write(data[i*chunk_size:(i+1)*chunk_size])
+        p.write(bytes(data[i*chunk_size:(i+1)*chunk_size]))
     #print(num_iters*chunk_size)
     #print(len(data))
     if (num_iters*chunk_size) != len(data):
-        p.write(data[num_iters*chunk_size:])
+        p.write(bytes(data[num_iters*chunk_size:]))
 
 def receiveByte_win(num_bytes):
     recv = int.from_bytes(p.read(size=num_bytes), byteorder='big')

@@ -4,7 +4,7 @@ class GSCTradingStrings:
     Class which collects all the text used by the program
     and methods connected to that.
     """
-    version_str = "Version: 3.0.1"
+    version_str = "Version: 3.0.2"
     buffered_str = "Buffered"
     synchronous_str = "Synchronous"
     send_request = "S"
