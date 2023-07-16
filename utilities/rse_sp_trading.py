@@ -15,6 +15,8 @@ class RSESPTradingClient(GSCTradingClient):
     pool_transfer = "P3SI"
     pool_transfer_out = "P3SO"
     choice_transfer = "CH3S"
+    version_client_transfer = "VEC3"
+    version_server_transfer = "VES3"
     accept_transfer = ["A3S1", "A3S2"]
     success_transfer = ["S3S1", "S3S2", "S3S3", "S3S4", "S3S5", "S3S6", "S3S7"]
     possible_transfers = {
@@ -31,6 +33,8 @@ class RSESPTradingClient(GSCTradingClient):
         success_transfer[4] : {1 + 3}, # Counter + Success
         success_transfer[5] : {1 + 3}, # Counter + Success
         success_transfer[6] : {1 + 3}, # Counter + Success
+        version_client_transfer : {6}, # Client's version value
+        version_server_transfer : {6}, # Server's version value
     }
     
     def __init__(self, trader, connection, verbose, stop_trade, party_reader, base_no_trade = base_folder + "base.bin", base_pool = base_folder + "base_pool.bin"):

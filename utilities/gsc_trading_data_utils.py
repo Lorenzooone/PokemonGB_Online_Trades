@@ -115,6 +115,7 @@ class GSCUtils:
     evolution_ids_path = "evolution_ids.bin"
     mail_ids_path = "ids_mail.bin"
     no_mail_path = "no_mail_section.bin"
+    base_random_path = "base_random_section.bin"
     base_stats_path = "stats.bin"
     text_conv_path = "text_conv.txt"
     pokemon_names_path = "pokemon_names.txt"
@@ -156,6 +157,7 @@ class GSCUtils:
         curr_class.evolution_ids = GSCUtilsLoaders.prepare_evolution_check_list(GSCUtilsMisc.read_data(self.get_path(curr_class.evolution_ids_path)))
         curr_class.mail_ids = GSCUtilsLoaders.prepare_check_list(GSCUtilsMisc.read_data(self.get_path(curr_class.mail_ids_path)))
         curr_class.no_mail_section = GSCUtilsMisc.read_data(self.get_path(curr_class.no_mail_path))
+        curr_class.base_random_section = GSCUtilsMisc.read_data(self.get_path(curr_class.base_random_path))
         curr_class.base_stats = GSCUtilsLoaders.prepare_stats(GSCUtilsMisc.read_data(self.get_path(curr_class.base_stats_path)), curr_class.num_stats, curr_class.num_entries)
         curr_class.pokemon_names = GSCUtilsLoaders.text_to_bytes(self.get_path(curr_class.pokemon_names_path), self.get_path(curr_class.text_conv_path))
         curr_class.moves_pp_list = GSCUtilsMisc.read_data(self.get_path(curr_class.moves_pp_list_path))
@@ -1177,9 +1179,10 @@ class GSCChecks:
         current_pp = pp & 0x3F
         pp_ups = (pp >> 6) & 3
         max_base_pp = self.utils_class.moves_pp_list[self.moves[self.curr_pp]]
-        max_pp = max_base_pp + (math.floor(max_base_pp/5) * pp_ups)
-        if max_pp > 61:
-            max_pp = 61
+        pp_increment = math.floor(max_base_pp/5)
+        if max_base_pp == 40:
+            pp_increment -= 1
+        max_pp = max_base_pp + (pp_increment * pp_ups)
         final_pp = pp
         if current_pp > max_pp:
             final_pp = (pp_ups << 6) | max_pp

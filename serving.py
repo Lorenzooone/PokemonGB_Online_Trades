@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+import datetime
 import asyncio
 import websockets
 import threading
@@ -9,6 +10,7 @@ import boto3
 import botocore
 from random import Random
 from time import sleep
+from utilities.trading_version import TradingVersion
 from utilities.high_level_listener import HighLevelListener
 from utilities.gsc_trading import GSCTradingClient
 from utilities.rby_trading import RBYTradingClient
@@ -113,6 +115,28 @@ class DataUploader(threading.Thread):
                 except botocore.exceptions.NoCredentialsError:
                     pass
 
+class ServerSpecificTransfers:
+    def __init__(self):
+        self.prepare_random_data()
+    
+    def prepare_random_data(self):
+        rnd = Random()
+        rnd.seed()
+        self.random_data = []
+        self.last_read = 0
+        for i in range(10):
+            self.random_data += [rnd.randint(0,0xFC)]
+
+    def handle_get_version(hll, version_transfer):
+        return hll.prepare_send_data(version_transfer, TradingVersion.prepare_version_data())
+
+    def handle_get_random(self, hll, random_transfer):
+        if self.last_read != 0:
+            if (datetime.datetime.now() - self.last_read).total_seconds() > (2 * 60):
+                self.prepare_random_data()
+        self.last_read = datetime.datetime.now()
+        return hll.prepare_send_data(random_transfer, self.random_data)
+
 class PoolTradeServer:
     """
     Class which handles the pool trading part.
@@ -155,7 +179,10 @@ class PoolTradeServer:
             self.get_handlers = {
                 self.trading_client_class.pool_transfer: self.handle_get_pool,
                 self.trading_client_class.accept_transfer: self.handle_get_accepted,
-                self.trading_client_class.success_transfer: self.handle_get_success
+                self.trading_client_class.success_transfer: self.handle_get_success,
+                self.trading_client_class.version_client_transfer: self.handle_get_client_version,
+                self.trading_client_class.version_server_transfer: self.handle_get_server_version,
+                self.trading_client_class.random_data_transfer: self.handle_get_random_data
             }
             self.send_handlers = {
                 self.trading_client_class.choice_transfer: self.handle_recv_mon,
@@ -177,7 +204,10 @@ class PoolTradeServer:
                 self.trading_client_class.success_transfer[3]: self.handle_get_success3_3,
                 self.trading_client_class.success_transfer[4]: self.handle_get_success3_4,
                 self.trading_client_class.success_transfer[5]: self.handle_get_success3_5,
-                self.trading_client_class.success_transfer[6]: self.handle_get_success3_6
+                self.trading_client_class.success_transfer[6]: self.handle_get_success3_6,
+                self.trading_client_class.version_client_transfer: self.handle_get_client_version,
+                self.trading_client_class.version_server_transfer: self.handle_get_server_version,
+                self.trading_client_class.random_data_transfer: self.handle_get_random_data
             }
             self.send_handlers = {
                 self.trading_client_class.pool_transfer_out: self.handle_recv_mon3,
@@ -236,6 +266,19 @@ class PoolTradeServer:
             return self.hll.prepare_send_data(self.trading_client_class.pool_transfer, [self.own_id] + [self.trading_client_class.pool_fail_value])
         else:
             return self.hll.prepare_send_data(self.trading_client_class.pool_transfer, [self.own_id] + self.utils_class.single_mon_to_data(self.mon[0], self.mon[1]))
+    
+    def handle_get_client_version(self):
+        return ServerSpecificTransfers.handle_get_version(self.hll, self.trading_client_class.version_client_transfer)
+    
+    def handle_get_server_version(self):
+        return ServerSpecificTransfers.handle_get_version(self.hll, self.trading_client_class.version_server_transfer)
+    
+    def handle_get_random_data(self):
+        """
+        Maybe a bit wasteful, but whatever...
+        """
+        i = ServerSpecificTransfers()
+        return i.handle_get_random(self.hll, self.trading_client_class.random_data_transfer)
     
     def handle_get_accepted(self):
         """
@@ -547,6 +590,7 @@ class ProxyLinkServer:
             checks_class = RSESPChecks
             self.trading_client_class = RSESPTradingClient
             self.utils_class = RSESPUtils
+        self.server_data = ServerSpecificTransfers()
         self.other = None
         self.other_ws = None
         self.own_ws = ws
@@ -559,12 +603,21 @@ class ProxyLinkServer:
         """
         request = self.hll.is_received_valid(data)
         if request is not None:
-            if (self.other is not None) and (self.other.other == self):
-                await self.other_ws.send(data)
-            else:
-                self.other = None
-                self.other_ws = None
-                await self.own_ws.close()
+            processed = False
+            if request[0] == GSCTradingStrings.get_request:
+                if request[1] == self.trading_client_class.version_server_transfer:
+                    await self.own_ws.send(ServerSpecificTransfers.handle_get_version(self.hll, self.trading_client_class.version_server_transfer))
+                    processed = True
+                elif request[1] == self.trading_client_class.random_data_transfer:
+                    await self.own_ws.send(self.server_data.handle_get_random(self.hll, self.trading_client_class.random_data_transfer))
+                    processed = True
+            if not processed:
+                if (self.other is not None) and (self.other.other == self):
+                    await self.other_ws.send(data)
+                else:
+                    self.other = None
+                    self.other_ws = None
+                    await self.own_ws.close()
     
 class WebsocketServer (threading.Thread):
     '''

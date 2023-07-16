@@ -135,20 +135,24 @@ class GSCTradingJP(GSCTrading):
     end_of_line = 0x50
     single_text_len = 0xB
     mail_sender_len = 0xE
+    end_of_player_name_pos = 6
+    end_of_gsc_data_pos = 0x13B
+    player_name_len_diff = 5
+    pokemon_name_len_diff = 5
     fillers = [{}, {
-        6: [5, end_of_line],
-        0x13B + (single_text_len * 0): [5, end_of_line],
-        0x13B + (single_text_len * 1): [5, end_of_line],
-        0x13B + (single_text_len * 2): [5, end_of_line],
-        0x13B + (single_text_len * 3): [5, end_of_line],
-        0x13B + (single_text_len * 4): [5, end_of_line],
-        0x13B + (single_text_len * 5): [5, end_of_line],
-        0x13B + (single_text_len * 6): [5, end_of_line],
-        0x13B + (single_text_len * 7): [5, end_of_line],
-        0x13B + (single_text_len * 8): [5, end_of_line],
-        0x13B + (single_text_len * 9): [5, end_of_line],
-        0x13B + (single_text_len * 10): [5, end_of_line],
-        0x13B + (single_text_len * 11): [5, end_of_line]
+        end_of_player_name_pos: [player_name_len_diff, end_of_line],
+        end_of_gsc_data_pos + (single_text_len * 0): [player_name_len_diff, end_of_line],
+        end_of_gsc_data_pos + (single_text_len * 1): [player_name_len_diff, end_of_line],
+        end_of_gsc_data_pos + (single_text_len * 2): [player_name_len_diff, end_of_line],
+        end_of_gsc_data_pos + (single_text_len * 3): [player_name_len_diff, end_of_line],
+        end_of_gsc_data_pos + (single_text_len * 4): [player_name_len_diff, end_of_line],
+        end_of_gsc_data_pos + (single_text_len * 5): [player_name_len_diff, end_of_line],
+        end_of_gsc_data_pos + (single_text_len * 6): [pokemon_name_len_diff, end_of_line],
+        end_of_gsc_data_pos + (single_text_len * 7): [pokemon_name_len_diff, end_of_line],
+        end_of_gsc_data_pos + (single_text_len * 8): [pokemon_name_len_diff, end_of_line],
+        end_of_gsc_data_pos + (single_text_len * 9): [pokemon_name_len_diff, end_of_line],
+        end_of_gsc_data_pos + (single_text_len * 10): [pokemon_name_len_diff, end_of_line],
+        end_of_gsc_data_pos + (single_text_len * 11): [pokemon_name_len_diff, end_of_line]
     }, {}, {}, {}]
     special_sections_starter = [next_section, next_section, next_section, mail_next_section, mail_next_section]
     special_sections_sync = [True, True, True, False, False]

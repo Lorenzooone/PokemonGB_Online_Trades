@@ -18,10 +18,13 @@ class RBYTradingClient(GSCTradingClient):
     success_transfer = "SUC1"
     buffered_transfer = "BUF1"
     negotiation_transfer = "NEG1"
+    version_client_transfer = "VEC1"
+    version_server_transfer = "VES1"
+    random_data_transfer = "RAN1"
     need_data_transfer = "ASK1"
     possible_transfers = {
         full_transfer: {0x271}, # Sum of special_sections_len
-        single_transfer: {7},
+        single_transfer: {7, 32},
         pool_transfer: {1 + 0x42, 1 + 1}, # Counter + Single Pokémon OR Counter + Fail
         moves_transfer: {1 + 1 + 8}, # Counter + Species + Moves
         choice_transfer : {1 + 1 + 0x42, 1 + 1}, # Counter + Choice + Single Pokémon OR Counter + Stop
@@ -29,6 +32,9 @@ class RBYTradingClient(GSCTradingClient):
         success_transfer : {1 + 1}, # Counter + Success
         buffered_transfer : {1 + 1}, # Counter + Buffered or not
         negotiation_transfer : {1 + 1}, # Counter + Convergence value
+        version_client_transfer : {6}, # Client's version value
+        version_server_transfer : {6}, # Server's version value
+        random_data_transfer : {10}, # Random values from server
         need_data_transfer : {1 + 1} # Counter + Whether it needs the other player's data
     }
     
@@ -127,9 +133,22 @@ class RBYTrading(GSCTrading):
         # Prepare checks
         self.checks.reset_species_item_list()
         # Send and get the sections
-        random_data, random_data_other = self.read_section(0, send_data[0], buffered)
-        pokemon_data, pokemon_data_other = self.read_section(1, send_data[1], buffered)
-        patches_data, patches_data_other = self.read_section(2, send_data[2], buffered)
+        send_data[0] = self.utils_class.base_random_section
+        just_sent = None
+        self.is_running_compat_3_mode = True
+        self.comms.send_client_version()
+        server_version = self.attempt_receive(self.comms.get_server_version, 5)
+        if server_version is not None:
+            send_data[0] = self.force_receive(self.comms.get_random)
+            other_client_version = self.attempt_receive(self.comms.get_client_version, 5)
+            if other_client_version is not None:
+                self.is_running_compat_3_mode = False
+        if self.is_running_compat_3_mode:
+            random_data, random_data_other, just_sent = self.read_section(0, send_data[0], buffered, just_sent, 0)
+        else:
+            random_data, random_data_other, just_sent = self.read_section(0, send_data[0], True, just_sent, 0)
+        pokemon_data, pokemon_data_other, just_sent = self.read_section(1, send_data[1], buffered, just_sent, 0)
+        patches_data, patches_data_other, just_sent = self.read_section(2, send_data[2], buffered, just_sent, 1)
         
         self.utils_class.apply_patches(pokemon_data, patches_data, self.utils_class)
         self.utils_class.apply_patches(pokemon_data_other, patches_data_other, self.utils_class)

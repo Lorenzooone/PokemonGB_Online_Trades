@@ -1,5 +1,7 @@
 import time
+import datetime
 from random import Random
+from .trading_version import TradingVersion
 from .gsc_trading_data_utils import *
 from .gsc_trading_menu import GSCBufferedNegotiator
 from .gsc_trading_strings import GSCTradingStrings
@@ -21,18 +23,24 @@ class GSCTradingClient:
     success_transfer = "SUC2"
     buffered_transfer = "BUF2"
     negotiation_transfer = "NEG2"
+    version_client_transfer = "VEC2"
+    version_server_transfer = "VES2"
+    random_data_transfer = "RAN2"
     need_data_transfer = "ASK2"
     possible_transfers = {
-        full_transfer: {0x412, 0x40C}, # Sum of special_sections_len - Ver 1.0 and 2.0
-        single_transfer: {7},
+        full_transfer: {0x412, 0x40C}, # Sum of special_sections_len - Ver 1.0, 2.0 - 4.0
+        single_transfer: {7, 32}, # Ver 1.0 - 3.0 and 4.0
         pool_transfer: {1 + 0x75 + 1, 1 + 1}, # Counter + Single Pokémon + Egg OR Counter + Fail
         moves_transfer: {1 + 8}, # Counter + Moves
-        mail_transfer : {1 + 0x24C}, # Counter + Mail - Ver 1.0
+        mail_transfer : {1 + 0x24C, 1 + 0x24B}, # Counter + Mail - Ver 1.0 - 3.0 and 4.0
         choice_transfer : {1 + 1 + 0x75 + 1, 1 + 1}, # Counter + Choice + Single Pokémon + Egg OR Counter + Stop
         accept_transfer : {1 + 1}, # Counter + Accept
         success_transfer : {1 + 1}, # Counter + Success
         buffered_transfer : {1 + 1}, # Counter + Buffered or not
         negotiation_transfer : {1 + 1}, # Counter + Convergence value
+        version_client_transfer : {6}, # Client's version value
+        version_server_transfer : {6}, # Server's version value
+        random_data_transfer : {10}, # Random values from server
         need_data_transfer : {1 + 1} # Counter + Whether it needs the other player's data
     }
     buffered_value = 0x85
@@ -67,6 +75,36 @@ class GSCTradingClient:
         Print if verbose...
         """
         GSCUtilsMisc.verbose_print(to_print, self.verbose, end=end)
+    
+    def get_server_version(self):
+        """
+        Handles getting the server's version.
+        """
+        ret = self.connection.recv_data(self.version_server_transfer)
+        if ret is not None:
+            ret = TradingVersion.read_version_data(ret)
+        return ret
+    
+    def get_client_version(self):
+        """
+        Handles getting the other's version.
+        """
+        ret = self.connection.recv_data(self.version_client_transfer)
+        if ret is not None:
+            ret = TradingVersion.read_version_data(ret)
+        return ret
+        
+    def send_client_version(self):
+        """
+        Handles sending my own version.
+        """
+        self.connection.send_data(self.version_client_transfer, TradingVersion.prepare_version_data())
+    
+    def get_random(self):
+        """
+        Handles getting the RNG values.
+        """
+        return self.connection.recv_data(self.random_data_transfer)
     
     def get_success(self):
         """
@@ -405,6 +443,11 @@ class GSCTrading:
     no_input = 0xFE
     no_input_alternative = 0xFF
     no_data = 0
+    total_send_buf_old_bytes = 2
+    bytes_per_send_buf_old_byte = 3
+    total_send_buf_new_bytes = 8
+    bytes_per_send_buf_new_byte = 4
+    max_tolerance_bytes = 3
     special_sections_len = [0xA, 0x1BC, 0xC5, 0x181]
     special_sections_starter = [next_section, next_section, next_section, mail_next_section]
     special_sections_sync = [True, True, True, False]
@@ -423,6 +466,8 @@ class GSCTrading:
         self.kill_function = kill_function
         self.extremely_verbose = False
         self.utils_class = self.get_and_init_utils_class()
+        self.is_running_compat_3_mode = False
+        self.max_seconds_between_transfers = 0.8
         self.pre_sleep = pre_sleep
     
     def get_and_init_utils_class(self):
@@ -489,12 +534,19 @@ class GSCTrading:
         or an error depending on kill_on_byte_drops.
         """
         if self.has_transfer_failed(byte, byte_index, section_index):
-            if self.menu.kill_on_byte_drops:
-                print(GSCTradingStrings.error_byte_dropped_str)
-                self.kill_function()
-            elif not self.printed_warning_drop:
-                self.verbose_print(GSCTradingStrings.warning_byte_dropped_str)
-                self.printed_warning_drop = True
+            self.act_on_bad_data()
+    
+    def act_on_bad_data(self):
+        """
+        If any byte was dropped, either drop a warning
+        or an error depending on kill_on_byte_drops.
+        """
+        if self.menu.kill_on_byte_drops:
+            print(GSCTradingStrings.error_byte_dropped_str)
+            self.kill_function()
+        elif not self.printed_warning_drop:
+            self.verbose_print(GSCTradingStrings.warning_byte_dropped_str)
+            self.printed_warning_drop = True
     
     def get_mail_section_id(self):
         return 3
@@ -522,7 +574,7 @@ class GSCTrading:
             return self.no_input_alternative
         return val
                     
-    def read_section(self, index, send_data, buffered):
+    def read_section(self, index, send_data, buffered, last_sent, last_index):
         """
         Reads a data section and sends it to the device.
         """
@@ -536,26 +588,10 @@ class GSCTrading:
         self.checks.prepare_species_buffer()
 
         if not buffered:
-            # Wait for a connection to be established if it's synchronous
-            send_buf = [[0xFFFF,0xFF],[0xFFFF,0xFF],[index]]
-            self.comms.send_trading_data(self.write_entire_data(send_buf))
-            found = False
-            if index == 0:
-                self.verbose_print(GSCTradingStrings.waiting_synchro_str)
-            while not found:
-                received = self.comms.get_trading_data()
-                if received is not None:
-                    recv_buf = self.read_entire_data(received)
-                    if recv_buf[1] is not None and recv_buf[1][0] == 0xFFFF and recv_buf[2][0] == index: 
-                        found = True
-                    elif recv_buf[1] is not None and recv_buf[1][0] == 0xFFFF:
-                        self.verbose_print(GSCTradingStrings.incompatible_trade_str)
-                        self.kill_function()
-                if not found:
-                    self.sleep_func()
-                    self.swap_byte(self.no_input)
-            if index == 0:
-                self.verbose_print(GSCTradingStrings.arrived_synchro_str)
+            if self.is_running_compat_3_mode:
+                self.synch_synch_section_old(index)
+            else:
+                send_buf = self.synch_synch_section_new(index, last_sent, last_index)
 
         if self.special_sections_sync[index]:
             next = self.no_input
@@ -603,63 +639,229 @@ class GSCTrading:
                 self.swap_byte(self.no_data)
             other_buf = send_data
         else:
-            # If the trade is synchronous, prepare small send buffers
-            self.printed_warning_drop = False
-            buf = [next]
-            other_buf = []
-            send_buf = [[0,next],[0xFFFF,0xFF],[index]]
-            recv_data = {}
-            i = 0
-            while i < (length + 1):
-                found = False
-                # Send the current byte (and the previous one) to the
-                # other client
-                self.comms.send_trading_data(self.write_entire_data(send_buf))
-                while not found:
-                    received = self.comms.get_trading_data()
-                    if received is not None:
-                        if i not in recv_data.keys():
-                            recv_buf = self.read_entire_data(received)
-                            # Get all the bytes we can consecutively send to the device
-                            recv_data = self.get_swappable_bytes(recv_buf, length, index)
-                        if i in recv_data.keys() and (i < length):
-                            # Clean it and send it
-                            cleaned_byte = self.prevent_no_input(checker[i](recv_data[i]))
-                            next_i = i+1
-                            # Handle fillers
-                            if next_i in self.fillers[index].keys():
-                                filler_len = self.fillers[index][next_i][0]
-                                filler_val = self.fillers[index][next_i][1]
-                                send_buf[(next_i)&1][0] = self.filler_value + filler_len
-                                send_buf[(next_i)&1][1] = filler_val
-                                buf += ([filler_val] * filler_len)
-                                for j in range(filler_len):
-                                    other_buf += [checker[next_i + j](filler_val)]
-                                i += (filler_len - 1)
-                            else:
-                                next = self.swap_byte(cleaned_byte)
-                                self.verbose_print(GSCTradingStrings.transfer_to_hardware_str.format(index=self.get_printable_index(index), completion=GSCTradingStrings.x_out_of_y_str(next_i, length)), end='')
-                                # Fillers aren't needed anymore, but their last byte may be needed
-                                self.remove_filler(send_buf, i)
-                                # This will, in turn, get the next byte
-                                # the other client needs
-                                send_buf[(next_i)&1][0] = next_i
-                                send_buf[(next_i)&1][1] = next
-                                other_buf += [cleaned_byte]
-                                # Check for "bad transfer" clues
-                                self.check_bad_data(cleaned_byte, i, index)
-                                self.check_bad_data(next, next_i, index)
-                                buf += [next]
-                            found = True
-                        # Handle the last byte differently
-                        elif i in recv_data.keys() and (i >= length):
-                            found = True
-                    if not found:
-                        self.sleep_func()
-                i += 1
+            if self.is_running_compat_3_mode:
+                buf, other_buf = self.synch_exchange_section_old(next, index, length, checker)
+            else:
+                buf, other_buf, last_sent = self.synch_exchange_section_new(next, index, length, checker, send_buf)
+
         self.verbose_print(GSCTradingStrings.separate_section_str, end='')
-        return buf, other_buf
+        return buf, other_buf, last_sent
     
+    def synch_synch_section_old(self, index):
+        # Wait for a connection to be established if it's synchronous
+        send_buf = [[0xFFFF,0xFF],[0xFFFF,0xFF],[index]]
+        self.comms.send_trading_data(self.write_entire_data(send_buf))
+        found = False
+        if index == 0:
+            self.verbose_print(GSCTradingStrings.waiting_synchro_str)
+        while not found:
+            received = self.comms.get_trading_data()
+            if received is not None:
+                recv_buf = self.read_entire_data(received)
+                if recv_buf[1] is not None and recv_buf[1][0] == 0xFFFF and recv_buf[2] == index: 
+                    found = True
+                elif recv_buf[1] is not None and recv_buf[1][0] == 0xFFFF:
+                    self.verbose_print(GSCTradingStrings.incompatible_trade_str)
+                    self.kill_function()
+            if not found:
+                self.sleep_func()
+                self.swap_byte(self.no_input)
+        if index == 0:
+            self.verbose_print(GSCTradingStrings.arrived_synchro_str)
+    
+    def synch_synch_section_new(self, index, last_sent, last_index):
+        # Wait for a connection to be established if it's synchronous
+        if last_sent is None:
+            send_buf = []
+            for i in range(self.total_send_buf_new_bytes):
+                send_buf += [[0xFFFF,0xFF, index, False, 0]]
+        else:
+            min_index = 0
+            for i in range(self.total_send_buf_new_bytes):
+                if(last_sent[i][0] < last_sent[min_index][0]):
+                    min_index = i
+                last_sent[min_index] = last_sent[self.total_send_buf_new_bytes - 1]
+            last_sent[self.total_send_buf_new_bytes - 1] = [0xFFFF,0xFF, index, False, 0]
+            send_buf = last_sent
+                
+        self.comms.send_trading_data(self.write_entire_data_new(send_buf))
+        found = False
+        if index == 1:
+            self.verbose_print(GSCTradingStrings.waiting_synchro_str)
+        while not found:
+            received = self.comms.get_trading_data()
+            if received is not None:
+                recv_buf = self.read_entire_data_new(received)
+                if recv_buf[self.total_send_buf_new_bytes - 1] is not None and recv_buf[self.total_send_buf_new_bytes - 1][0] == 0xFFFF:
+                    if recv_buf[self.total_send_buf_new_bytes - 1][2] == index: 
+                        found = True
+                    elif recv_buf[self.total_send_buf_new_bytes - 1][2] != last_index:
+                        self.verbose_print(GSCTradingStrings.incompatible_trade_str)
+                        self.kill_function()
+            if not found:
+                self.sleep_func()
+                self.swap_byte(self.no_input)
+        if index == 1:
+            self.verbose_print(GSCTradingStrings.arrived_synchro_str)
+        return send_buf
+
+    def synch_exchange_section_old(self, next, index, length, checker):
+        # If the trade is synchronous, prepare small send buffers
+        self.printed_warning_drop = False
+        buf = [next]
+        other_buf = []
+        send_buf = [[0,next],[0xFFFF,0xFF],[index]]
+        recv_data = {}
+        i = 0
+        while i < (length + 1):
+            found = False
+            # Send the current byte (and the previous one) to the
+            # other client
+            self.comms.send_trading_data(self.write_entire_data(send_buf))
+            while not found:
+                received = self.comms.get_trading_data()
+                if received is not None:
+                    if i not in recv_data.keys():
+                        recv_buf = self.read_entire_data(received)
+                        # Get all the bytes we can consecutively send to the device
+                        recv_data = self.get_swappable_bytes(recv_buf, length, index)
+                    if i in recv_data.keys() and (i < length):
+                        # Clean it and send it
+                        cleaned_byte = self.prevent_no_input(checker[i](recv_data[i]))
+                        next_i = i+1
+                        # Handle fillers
+                        if next_i in self.fillers[index].keys():
+                            filler_len = self.fillers[index][next_i][0]
+                            filler_val = self.fillers[index][next_i][1]
+                            send_buf[(next_i)&1][0] = self.filler_value + filler_len
+                            send_buf[(next_i)&1][1] = filler_val
+                            buf += ([filler_val] * filler_len)
+                            for j in range(filler_len):
+                                other_buf += [checker[next_i + j](filler_val)]
+                            i += (filler_len - 1)
+                        else:
+                            next = self.swap_byte(cleaned_byte)
+                            self.verbose_print(GSCTradingStrings.transfer_to_hardware_str.format(index=self.get_printable_index(index), completion=GSCTradingStrings.x_out_of_y_str(next_i, length)), end='')
+                            # Fillers aren't needed anymore, but their last byte may be needed
+                            self.remove_filler(send_buf, i)
+                            # This will, in turn, get the next byte
+                            # the other client needs
+                            send_buf[(next_i)&1][0] = next_i
+                            send_buf[(next_i)&1][1] = next
+                            other_buf += [cleaned_byte]
+                            # Check for "bad transfer" clues
+                            self.check_bad_data(cleaned_byte, i, index)
+                            self.check_bad_data(next, next_i, index)
+                            buf += [next]
+                        found = True
+                    # Handle the last byte differently
+                    elif i in recv_data.keys() and (i >= length):
+                        found = True
+                if not found:
+                    self.sleep_func()
+            i += 1
+        return buf, other_buf
+
+    def synch_exchange_section_new(self, next, index, length, checker, send_buf):
+        # If the trade is synchronous, prepare small send buffers
+        self.printed_warning_drop = False
+        buf = [next]
+        other_buf = []
+        recv_data = {}
+        safety_transfer_amount = self.max_tolerance_bytes - 2
+        pos_recv = 0
+        i = 0
+        pos_send = 0
+        send_index = 0
+        bytes_offset = 1
+        bytes_offset_target = self.max_tolerance_bytes
+        send_buf[send_index] = [pos_send, next, index, False, 0]
+        pos_send += 1
+        send_index = (send_index + 1) % self.total_send_buf_new_bytes
+        last_transfer_time = datetime.datetime.now()
+        self.comms.send_trading_data(self.write_entire_data_new(send_buf))
+        while i < (length - self.max_tolerance_bytes):
+            received = self.comms.get_trading_data()
+            if received is not None:
+                recv_buf = self.read_entire_data_new(received)
+                # Get all the bytes we can consecutively send to the device
+                recv_data = self.get_swappable_bytes_new(recv_buf, length, index)
+                while pos_recv in recv_data.keys():
+                    if pos_recv >= length:
+                        break
+                    cleaned_byte = self.prevent_no_input(checker[pos_recv](recv_data[pos_recv]))
+                    other_buf += [cleaned_byte]
+                    pos_recv += 1
+                    
+                    if pos_recv in self.fillers[index].keys():
+                        filler_len = self.fillers[index][pos_send][0]
+                        filler_val = self.fillers[index][pos_send][1]
+                        added_len = 0
+                        for j in range(filler_len):
+                            if (pos_recv + j) >= length:
+                                break
+                            other_buf += [checker[pos_recv + j](filler_val)]
+                            added_len += 1
+                        pos_recv += added_len
+            byte_to_console = self.no_input
+            schedule_console = False
+            time_diff = datetime.datetime.now() - last_transfer_time
+            if time_diff.total_seconds() >= self.max_seconds_between_transfers:
+                schedule_console = True
+            if bytes_offset < bytes_offset_target:
+                schedule_console = True
+            elif pos_recv > i:
+                byte_to_console = other_buf[i]
+                if pos_recv > (i + safety_transfer_amount):
+                    schedule_console = True
+                if schedule_console:
+                    i += 1
+                    if i in self.fillers[index].keys():
+                        filler_len = self.fillers[index][pos_send][0]
+                        i += filler_len
+            
+            if schedule_console:
+                if byte_to_console == self.no_input:
+                    bytes_offset += 1
+                    if bytes_offset > self.max_tolerance_bytes:
+                        self.act_on_bad_data()
+                next = self.swap_byte(byte_to_console)
+                self.verbose_print(GSCTradingStrings.transfer_to_hardware_str.format(index=self.get_printable_index(index), completion=GSCTradingStrings.x_out_of_y_str(i, length)), end='')
+                last_transfer_time = datetime.datetime.now()
+                send_buf[send_index] = [pos_send, next, index, False, 0]
+                send_index = (send_index + 1) % self.total_send_buf_new_bytes
+                buf += [next]
+                pos_send += 1
+                if pos_send in self.fillers[index].keys():
+                    filler_len = self.fillers[index][pos_send][0]
+                    filler_val = self.fillers[index][pos_send][1]
+                    send_buf[send_index] = [pos_send, filler_val, index, True, filler_len]
+                    send_index = (send_index + 1) % self.total_send_buf_new_bytes
+                    buf += ([filler_val] * filler_len)
+                    pos_send += filler_len
+                self.comms.send_trading_data(self.write_entire_data_new(send_buf))
+            self.sleep_func()
+
+        while i < (length - (bytes_offset)):
+            byte_to_console = self.no_data
+            i += 1
+            schedule_console = True
+
+            if schedule_console:
+                next = self.swap_byte(byte_to_console)
+                self.verbose_print(GSCTradingStrings.transfer_to_hardware_str.format(index=self.get_printable_index(index), completion=GSCTradingStrings.x_out_of_y_str(i, length)), end='')
+                send_buf[send_index] = [pos_send, next, index, False, 0]
+                send_index = (send_index + 1) % self.total_send_buf_new_bytes
+                pos_send += 1
+                self.comms.send_trading_data(self.write_entire_data_new(send_buf))
+            self.sleep_func()
+        while len(buf) < length:
+            buf += [self.no_data]
+        while len(other_buf) < length:
+            other_buf += [self.no_data]
+        self.verbose_print(GSCTradingStrings.transfer_to_hardware_str.format(index=self.get_printable_index(index), completion=GSCTradingStrings.x_out_of_y_str(length, length)), end='')
+        return buf, other_buf, send_buf
+
     def swap_byte(self, send_data):
         """
         Swaps a byte with the device. First send, and then receives.
@@ -688,7 +890,7 @@ class GSCTrading:
         Tries to read a single synchronous entry.
         """
         if recv_buf[scanning_index] is not None:
-            if recv_buf[2][0] >= (index + 1):
+            if recv_buf[2] >= (index + 1):
                 ret[length] = 0
             else:
                 byte_num = recv_buf[scanning_index][0]
@@ -701,17 +903,33 @@ class GSCTrading:
                     byte_num = recv_buf[previous_scanning_index][0]
                     for j in range(total_bytes):
                         ret[byte_num + 1 + j] = recv_buf[scanning_index][1]
+    
+    def prepare_single_entry_new(self, recv_buf, scanning_index, length, index, ret):
+        """
+        Tries to read a single synchronous entry.
+        """
+        if recv_buf[scanning_index] is not None:
+            if recv_buf[scanning_index][2] > index:
+                ret[length] = 0
+            else:
+                byte_num = recv_buf[scanning_index][0]
+                if byte_num <= length:
+                    if recv_buf[scanning_index][3]:
+                        for j in range(recv_buf[scanning_index][4]):
+                            ret[byte_num + j] = recv_buf[scanning_index][1]
+                    else:
+                        ret[byte_num] = recv_buf[scanning_index][1]
         
     def remove_filler(self, send_buf, curr_byte_num):
         """
         Removes the filler from the send buffer when a new byte is read.
         Also prevents desyncs.
         """
-        for i in range(2):
+        for i in range(self.total_send_buf_old_bytes):
             byte_num = send_buf[i][0]
             byte_val = send_buf[i][1]
             if byte_num > self.filler_value and byte_num <= self.last_filler_value:
-                for j in range(2):
+                for j in range(self.total_send_buf_old_bytes):
                     send_buf[j][0] = curr_byte_num
                     send_buf[j][1] = byte_val
     
@@ -721,15 +939,33 @@ class GSCTrading:
         Tries to speedup the transfer a bit.
         """
         ret = {}
-        for i in range(2):
+        for i in range(self.total_send_buf_old_bytes):
             self.prepare_single_entry(recv_buf, i, length, index, ret)
         return ret
     
+    def get_swappable_bytes_new(self, recv_buf, length, index):
+        """
+        Returns the maximum amount of bytes we can swap freely.
+        Tries to speedup the transfer a bit.
+        """
+        ret = {}
+        for i in range(self.total_send_buf_new_bytes):
+            self.prepare_single_entry_new(recv_buf, i, length, index, ret)
+        return ret
+    
     def read_entire_data(self, data):
-        return [self.read_sync_data(data, 0), self.read_sync_data(data, 3), [data[6]]]
+        final_product = []
+        for i in range(self.total_send_buf_old_bytes):
+            final_product += [self.read_sync_data(data, i * self.bytes_per_send_buf_old_byte)]
+        final_product += [data[self.total_send_buf_old_bytes * self.bytes_per_send_buf_old_byte]]
+        return final_product
         
     def write_entire_data(self, data):
-        return self.write_sync_data(data[0]) + self.write_sync_data(data[1]) + data[2]
+        final_product = []
+        for i in range(self.total_send_buf_old_bytes):
+            final_product += self.write_sync_data(data[i])
+        final_product += data[self.total_send_buf_old_bytes]
+        return final_product
     
     def read_sync_data(self, data, pos):
         if data is not None and len(data) > 0:
@@ -738,6 +974,41 @@ class GSCTrading:
     
     def write_sync_data(self, data):
         return [(data[0]>>8)&0xFF, data[0]&0xFF, data[1]]
+    
+    def read_entire_data_new(self, data):
+        final_product = []
+        for i in range(self.total_send_buf_new_bytes):
+            final_product += [self.read_sync_data_new(data, i * self.bytes_per_send_buf_new_byte)]
+        return final_product
+        
+    def write_entire_data_new(self, data):
+        final_product = []
+        for i in range(self.total_send_buf_new_bytes):
+            final_product += self.write_sync_data_new(data[i])
+        return final_product
+    
+    def read_sync_data_new(self, data, pos):
+        if data is not None and len(data) > 0:
+            ret_val = [((data[pos]&0x01)<<8) + data[pos+1], data[pos+2], data[pos+3], self.read_is_filler(data[pos]), (data[pos] >> 1) & 0x3F]
+            if ret_val[0] == (0xFFFF & 0x1FF):
+                ret_val[0] = 0xFFFF
+                ret_val[3] = False
+                ret_val[4] = 0
+            return ret_val
+        return None
+    
+    def read_is_filler(self, value):
+        if (value >> 7) == 1:
+            return True
+        return False
+    
+    def write_is_filler(self, value):
+        if value == True:
+            return 1 << 7
+        return 0 << 7
+    
+    def write_sync_data_new(self, data):
+        return [((data[0]>>8)&0x01) | ((data[4] & 0x3F) << 1) | self.write_is_filler(data[3]), data[0]&0xFF, data[1], data[2]]
     
     def end_trade(self):
         """
@@ -852,6 +1123,21 @@ class GSCTrading:
             self.sleep_func()
             received = fun()
             self.swap_byte(self.no_input)
+        return received
+
+    def attempt_receive(self, fun, max_seconds):
+        """
+        Blocking wait for the requested data, with timeout
+        It also keeps the device clock running properly.
+        """
+        received = None
+        start = datetime.datetime.now()
+        while received is None:
+            self.sleep_func()
+            received = fun()
+            self.swap_byte(self.no_input)
+            if (datetime.datetime.now() - start).total_seconds() > max_seconds:
+                break
         return received
     
     def reset_trade(self):
@@ -1028,10 +1314,24 @@ class GSCTrading:
         # Prepare checks
         self.checks.reset_species_item_list()
         # Send and get the first two sections
-        random_data, random_data_other = self.read_section(0, send_data[0], buffered)
-        pokemon_data, pokemon_data_other = self.read_section(1, send_data[1], buffered)
+        send_data[0] = self.utils_class.base_random_section
+        just_sent = None
+        self.is_running_compat_3_mode = True
+        self.comms.send_client_version()
+        server_version = self.attempt_receive(self.comms.get_server_version, 5)
+        if server_version is not None:
+            send_data[0] = self.force_receive(self.comms.get_random)
+            other_client_version = self.attempt_receive(self.comms.get_client_version, 5)
+            if other_client_version is not None:
+                self.is_running_compat_3_mode = False
+        
+        if self.is_running_compat_3_mode:
+            random_data, random_data_other, just_sent = self.read_section(0, send_data[0], buffered, just_sent, 0)
+        else:
+            random_data, random_data_other, just_sent = self.read_section(0, send_data[0], True, just_sent, 0)
+        pokemon_data, pokemon_data_other, just_sent = self.read_section(1, send_data[1], buffered, just_sent, 0)
         # Get and apply patches for the Pokémon data
-        patches_data, patches_data_other = self.read_section(2, send_data[2], buffered)
+        patches_data, patches_data_other, just_sent = self.read_section(2, send_data[2], buffered, just_sent, 1)
         self.utils_class.apply_patches(pokemon_data, patches_data, self.utils_class)
         self.utils_class.apply_patches(pokemon_data_other, patches_data_other, self.utils_class)
                 
@@ -1043,7 +1343,7 @@ class GSCTrading:
         # Trade mail data only if needed
         if (pokemon_own_mail or pokemon_other_mail) or buffered:
             send_data[3] = self.convert_mail_data(send_data[3], True)
-            mail_data, mail_data_other = self.read_section(self.get_mail_section_id(), send_data[3], buffered)
+            mail_data, mail_data_other, just_sent = self.read_section(self.get_mail_section_id(), send_data[3], buffered, just_sent, 2)
             mail_data = self.convert_mail_data(mail_data, False)
         else:
             send_data[3] = self.utils_class.no_mail_section
@@ -1051,7 +1351,7 @@ class GSCTrading:
                 
             # Exchange mail data with the device
             send_data[3] = self.convert_mail_data(send_data[3], True)
-            mail_data, mail_data_other = self.read_section(self.get_mail_section_id(), send_data[3], True)
+            mail_data, mail_data_other, just_sent = self.read_section(self.get_mail_section_id(), send_data[3], True, just_sent, 2)
             mail_data = self.convert_mail_data(mail_data, False)
         
         # Apply patches for the mail data

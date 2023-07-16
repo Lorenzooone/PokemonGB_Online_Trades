@@ -1,5 +1,6 @@
 import threading
 from random import Random
+from .trading_version import TradingVersion
 from .gsc_trading_strings import GSCTradingStrings
 from argparse import ArgumentParser
 
@@ -93,7 +94,7 @@ class GSCTradingMenu:
                     ret_val = ret_val()
     
     def handle_menu(self):
-        GSCTradingStrings.version_print()
+        GSCTradingStrings.version_print(TradingVersion.version_major, TradingVersion.version_minor, TradingVersion.version_build)
         if self.multiboot:
             self.start_pool_trading()
         elif self.trade_type is None or ((self.trade_type != GSCTradingStrings.two_player_trade_str) and (self.trade_type != GSCTradingStrings.pool_trade_str)):
