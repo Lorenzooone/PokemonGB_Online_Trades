@@ -450,6 +450,7 @@ class GSCTrading:
     max_tolerance_bytes = 3
     special_sections_len = [0xA, 0x1BC, 0xC5, 0x181]
     special_sections_starter = [next_section, next_section, next_section, mail_next_section]
+    special_sections_preamble_len = [7, 6, 3, 5]
     special_sections_sync = [True, True, True, False]
     drop_bytes_checks = [[0xA, 0x1B9, 0xC5, 0x181], [next_section, next_section, mail_next_section, no_input], [0,0,0,0]]
     stop_trade = 0x7F
@@ -596,11 +597,21 @@ class GSCTrading:
         if self.special_sections_sync[index]:
             next = self.no_input
         # Make sure the device is in the right state
-        while next != self.special_sections_starter[index]:
-            next = self.swap_byte(next)
-        # Sync with the device and start the actual trade
-        while next == self.special_sections_starter[index]:
-            next = self.swap_byte(next)
+        recv = next
+        while recv != self.special_sections_starter[index]:
+            recv = self.swap_byte(next)
+        next = self.special_sections_starter[index]
+        # Random has no leeway, though it's not needed, since master sets the RNG
+        if buffered and (index == 0):
+            # The "+ 1" is because the first one is not counted...
+            for i in range(self.special_sections_preamble_len[index] + 1):
+                next = self.swap_byte(next)
+                if next != self.special_sections_starter[index]:
+                    break
+        else:
+            # Sync with the device and start the actual trade
+            while next == self.special_sections_starter[index]:
+                next = self.swap_byte(next)
         # next now contains the first received byte from the device!
 
         self.verbose_print(GSCTradingStrings.separate_section_str, end='')
