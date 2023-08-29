@@ -16,9 +16,8 @@ def read_all(receiver, debug=False):
             data = receiver(0x40)
             if len(data) == 0:
                 break
-            output <<= (8*prev_len)
+            output <<= (8 * len(data))
             output |= int.from_bytes(data, byteorder='big')
-            prev_len = len(data)
         except:
             break
     if debug:
