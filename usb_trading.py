@@ -31,7 +31,7 @@ path = "pokemon_gen3_to_genx_mb.gba"
 def kill_function():
     os.kill(os.getpid(), signal.SIGINT)
 
-def transfer_func(sender, receiver, list_sender, raw_receiver):
+def transfer_func(sender, receiver, list_sender, raw_receiver, is_serial):
     menu = GSCTradingMenu(kill_function)
     menu.handle_menu()
     
@@ -54,7 +54,10 @@ def transfer_func(sender, receiver, list_sender, raw_receiver):
     multiboot.read_all(raw_receiver)
     list_sender(config_base, chunk_size=len(config_base))
     ret = multiboot.read_all(raw_receiver)
-    
+
+    if is_serial and (ret != 1):
+        print("WARNING: Firmware not recognized!\nWhen using Serial, you MUST use a firmware which doesn't alter the output!\nIt's best if you update to the one available at:\nhttps://github.com/Lorenzooone/gb-link-firmware-reconfigurable/releases")
+
     if(menu.gen == 3) and (ret != 1):
         print("Non-reconfigurable firmware found!\nIt's best if you update to the one available at:\nhttps://github.com/Lorenzooone/gb-link-firmware-reconfigurable/releases")
     
@@ -261,6 +264,7 @@ signal.signal(signal.SIGINT, signal_handler)
 try_serial = False
 try_libusb = False
 try_winusbcdc = False
+is_serial = False
 try:
     import usb.core
     import usb.util
@@ -289,13 +293,6 @@ found = False
 
 # The execution path
 try:
-    if (not found) and try_serial:
-        if(serial_method()):
-            sender = sendByte_serial
-            receiver = receiveByte_serial
-            list_sender = sendList_serial
-            raw_receiver = receiveByte_raw_serial
-            found = True
     if (not found) and try_libusb:
         if(libusb_method()):
             sender = sendByte
@@ -310,10 +307,18 @@ try:
             list_sender = sendList_win
             raw_receiver = receiveByte_raw_win
             found = True
+    if (not found) and try_serial:
+        if(serial_method()):
+            sender = sendByte_serial
+            receiver = receiveByte_serial
+            list_sender = sendList_serial
+            raw_receiver = receiveByte_raw_serial
+            found = True
+            is_serial = True
 
     if found:
         print("USB connection established!")
-        transfer_func(sender, receiver, list_sender, raw_receiver)
+        transfer_func(sender, receiver, list_sender, raw_receiver, is_serial)
     else:
         print("Couldn't find USB device!")
         missing = ""
