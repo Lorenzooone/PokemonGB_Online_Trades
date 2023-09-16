@@ -31,7 +31,7 @@ Run `pip install websockets`.
 
 If you are using the USB adapter, also run:
 
-`pip install pyUSB` and `pip install winusbcdc`.
+`pip install pyserial`, `pip install pyUSB` and `pip install winusbcdc`.
 
 ## Using the GB Link Cable to USB Adapter
 Run `python ./usb_trading.py`.
