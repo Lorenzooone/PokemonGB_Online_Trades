@@ -21,7 +21,8 @@ serial_port = None
 epIn = None
 epOut = None
 p = None
-max_usb_timeout = 5
+max_usb_timeout_w = 5
+max_usb_timeout_r = 0.1
 
 VID = 0xcafe
 PID = 0x4011
@@ -89,25 +90,25 @@ def transfer_func(sender, receiver, list_sender, raw_receiver, is_serial):
 
 # Code dependant on this connection method
 def sendByte(byte_to_send, num_bytes):
-    epOut.write(byte_to_send.to_bytes(num_bytes, byteorder='big'), timeout=max_usb_timeout * 1000)
+    epOut.write(byte_to_send.to_bytes(num_bytes, byteorder='big'), timeout=int(max_usb_timeout_w * 1000))
     return
 
 # Code dependant on this connection method
 def sendList(data, chunk_size=8):
     num_iters = int(len(data)/chunk_size)
     for i in range(num_iters):
-        epOut.write(data[i*chunk_size:(i+1)*chunk_size], timeout=max_usb_timeout * 1000)
+        epOut.write(data[i*chunk_size:(i+1)*chunk_size], timeout=int(max_usb_timeout_w * 1000))
     #print(num_iters*chunk_size)
     #print(len(data))
     if (num_iters*chunk_size) != len(data):
-        epOut.write(data[num_iters*chunk_size:], timeout=max_usb_timeout * 1000)
+        epOut.write(data[num_iters*chunk_size:], timeout=int(max_usb_timeout_w * 1000))
 
 def receiveByte(num_bytes):
-    recv = int.from_bytes(epIn.read(num_bytes, timeout=max_usb_timeout * 1000), byteorder='big')
+    recv = int.from_bytes(epIn.read(num_bytes, timeout=int(max_usb_timeout_r * 1000)), byteorder='big')
     return recv
 
 def receiveByte_raw(num_bytes):
-    return epIn.read(num_bytes, timeout=max_usb_timeout * 1000)
+    return epIn.read(num_bytes, timeout=int(max_usb_timeout_r * 1000))
 
 # Code dependant on this connection method
 def sendByte_serial(byte_to_send, num_bytes):
@@ -234,7 +235,7 @@ def winusbcdc_method():
             if not p.is_open:
                 return False
             #p.baudrate = 115200
-            p.settimeout(max_usb_timeout)
+            p.settimeout(max_usb_timeout_r)
         except:
             return False
     else:
@@ -254,7 +255,7 @@ def serial_method():
                     break
         if port is None:
             return False
-        serial_port = serial.Serial(port=port, bytesize=8, timeout=0.05, write_timeout = max_usb_timeout)
+        serial_port = serial.Serial(port=port, bytesize=8, timeout=max_usb_timeout_r, write_timeout = max_usb_timeout_w)
     except Exception as e:
         return False
     return True
