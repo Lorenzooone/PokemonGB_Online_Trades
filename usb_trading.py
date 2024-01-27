@@ -23,6 +23,7 @@ epOut = None
 p = None
 max_usb_timeout_w = 5
 max_usb_timeout_r = 0.1
+max_packet_size = 0x40
 
 VID = 0xcafe
 PID = 0x4011
@@ -52,7 +53,9 @@ def transfer_func(sender, receiver, list_sender, raw_receiver, is_serial):
     else:
         config_base = multiboot.get_configure_list(1000, 1)
 
-    multiboot.read_all(raw_receiver)
+    result = 1
+    while result != 0:
+        result = multiboot.read_all(raw_receiver)
     list_sender(config_base, chunk_size=len(config_base))
     ret = multiboot.read_all(raw_receiver)
 
@@ -103,11 +106,15 @@ def sendList(data, chunk_size=8):
     if (num_iters*chunk_size) != len(data):
         epOut.write(data[num_iters*chunk_size:], timeout=int(max_usb_timeout_w * 1000))
 
-def receiveByte(num_bytes):
+def receiveByte(num_bytes=None):
+    if num_bytes is None:
+        num_bytes = max_packet_size
     recv = int.from_bytes(epIn.read(num_bytes, timeout=int(max_usb_timeout_r * 1000)), byteorder='big')
     return recv
 
-def receiveByte_raw(num_bytes):
+def receiveByte_raw(num_bytes=None):
+    if num_bytes is None:
+        num_bytes = max_packet_size
     return epIn.read(num_bytes, timeout=int(max_usb_timeout_r * 1000))
 
 # Code dependant on this connection method
@@ -125,11 +132,15 @@ def sendList_serial(data, chunk_size=8):
     if (num_iters*chunk_size) != len(data):
         serial_port.write(bytes(data[num_iters*chunk_size:]))
 
-def receiveByte_serial(num_bytes):
+def receiveByte_serial(num_bytes=None):
+    if num_bytes is None:
+        num_bytes = max_packet_size
     recv = int.from_bytes(serial_port.read(num_bytes), byteorder='big')
     return recv
 
-def receiveByte_raw_serial(num_bytes):
+def receiveByte_raw_serial(num_bytes=None):
+    if num_bytes is None:
+        num_bytes = max_packet_size
     return serial_port.read(num_bytes)
 
 # Code dependant on this connection method
@@ -138,6 +149,9 @@ def sendByte_win(byte_to_send, num_bytes):
 
 # Code dependant on this connection method
 def sendList_win(data, chunk_size=8):
+    #Why? Idk. But it fixes it... :/
+    if(chunk_size > 0x3C):
+        chunk_size = 0x3C
     num_iters = int(len(data)/chunk_size)
     for i in range(num_iters):
         p.write(bytes(data[i*chunk_size:(i+1)*chunk_size]))
@@ -146,12 +160,56 @@ def sendList_win(data, chunk_size=8):
     if (num_iters*chunk_size) != len(data):
         p.write(bytes(data[num_iters*chunk_size:]))
 
-def receiveByte_win(num_bytes):
-    recv = int.from_bytes(p.read(size=num_bytes), byteorder='big')
+# Code dependant on this connection method
+# The original was so slow, I had to rewrite it a bit to make it work for time sensitive applications
+def read_win(self, size=None):
+    if not self.is_open:
+        return None
+    rx = [self._rxremaining]
+    length = len(self._rxremaining)
+    self._rxremaining = b''
+    end_timeout = time.time() + (self.timeout or 0.2)
+    if size:
+        super(ComPort, self).set_timeout(self._ep_in, (self.timeout or 0.2) * 10)
+        while length < size:
+            c = super(ComPort, self).read(self._ep_in, size-length)
+            if c is not None and len(c):
+                rx.append(c)
+                length += len(c)
+                if len(c) == self.maximum_packet_size:
+                    end_timeout += (self.timeout or 0.2)
+            if time.time() > end_timeout:
+                break
+    else:
+        super(ComPort, self).set_timeout(self._ep_in, (self.timeout or 0.2))
+        while True:
+            c = super(ComPort, self).read(self._ep_in, self.maximum_packet_size)
+            if c is not None and len(c):
+                rx.append(c)
+                length += len(c)
+                if len(c) == self.maximum_packet_size:
+                    end_timeout += (self.timeout or 0.2)
+                else:
+                    break
+            else:
+                break
+            if time.time() > end_timeout:
+                break
+    chunk = b''.join(rx)
+    if size and len(chunk) >= size:
+        if self._rxremaining:
+            self._rxremaining = chunk[size:] + self._rxremaining
+        else:
+            self._rxremaining = chunk[size:]
+        chunk = chunk[0:size]
+    return chunk
+
+def receiveByte_win(num_bytes=None):
+    recv = int.from_bytes(read_win(p, size=num_bytes), byteorder='big')
     return recv
 
-def receiveByte_raw_win(num_bytes):
-    return p.read(size=num_bytes)
+def receiveByte_raw_win(num_bytes=None):
+    return read_win(p, size=num_bytes)
 
 # Things for the USB connection part
 def exit_gracefully():

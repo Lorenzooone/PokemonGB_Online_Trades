@@ -1,7 +1,10 @@
 import os
 import time
+import traceback
+import sys
 
 # From: https://github.com/Squaresweets/TileWorldGBA
+max_packet_size_mb = 0x40
 
 def get_configure_list(us_between_transfer, bytes_for_transfer):
     config_base = [0xCA, 0xFE, 0xCA, 0xFE, 0xCA, 0xFE, 0xCA, 0xFE, 0xCA, 0xFE, 0xCA, 0xFE, 0xCA, 0xFE, 0xCA, 0xFE, 0xDE, 0xAD, 0xBE, 0xEF, 0xDE, 0xAD, 0xBE, 0xEF, 0xDE, 0xAD, 0xBE, 0xEF, 0xDE, 0xAD, 0xBE, 0xEF]
@@ -9,16 +12,21 @@ def get_configure_list(us_between_transfer, bytes_for_transfer):
     return config_base
 
 def read_all(receiver, debug=False):
+    time.sleep(0.01)
     output = 0
     prev_len = 0
     while True:
         try:
-            data = receiver(0x40)
+            data = receiver()
             if len(data) == 0:
                 break
             output <<= (8 * len(data))
             output |= int.from_bytes(data, byteorder='big')
+            if len(data) < max_packet_size_mb:
+                break
         except:
+            #traceback.print_exc()
+            #print("Unexpected exception: ", sys.exc_info()[0])
             break
     if debug:
         print("0x%02x " % output)
@@ -90,7 +98,7 @@ def multiboot(receiver, sender, list_sender, path):
 
     sender(0x63D1, 4)
     token = read_all(receiver)
-    if (token >> 24) != 0x73:
+    if ((token >> 24) & 0xFF) != 0x73:
         print("Failed handshake!")
         return
     else:
@@ -117,7 +125,7 @@ def multiboot(receiver, sender, list_sender, path):
         complete_sending_data[(i*4)+3] = ((sending_data[i] ^ seed)>>0) & 0xFF
         
     time_transfer = time.time()
-    list_sender(complete_sending_data, chunk_size = 0x40)
+    list_sender(complete_sending_data, chunk_size = max_packet_size_mb)
     time_transfer = time.time()-time_transfer
     print(time_transfer)
     
@@ -133,11 +141,12 @@ def multiboot(receiver, sender, list_sender, path):
             crcC = (crcC >> 1) ^ 0xc37b
         tmp >>= 1
 
+    read_all(receiver)
     sender(0x0065, 4)
     while True:
         sender(0x0065, 4)
         recv = read_all(receiver)
-        if (recv >> 16) == 0x0075:
+        if ((recv >> 16) & 0xFFFF) == 0x0075:
             break
 
     sender(0x0066, 4)
